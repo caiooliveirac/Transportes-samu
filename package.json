@@ -20,6 +20,7 @@
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @samu-cru/db generate",
     "db:migrate": "pnpm --filter @samu-cru/db migrate",
+    "db:seed": "pnpm --filter @samu-cru/db seed",
     "db:studio": "pnpm --filter @samu-cru/db studio",
     "test": "pnpm -r --if-present test",
     "setup:db": "bash scripts/setup-db.sh"

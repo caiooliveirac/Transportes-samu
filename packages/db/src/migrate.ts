@@ -1,9 +1,11 @@
-import "dotenv/config";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { loadMonorepoEnv } from "./load-env";
+
+loadMonorepoEnv();
 
 async function main() {
   const url = process.env.DATABASE_URL;

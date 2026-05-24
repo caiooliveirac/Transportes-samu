@@ -3,44 +3,64 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-05-24 · Fase 0 (Setup do monorepo) — concluída local, aguardando push
+**Última atualização:** 2026-05-24 · Fase 1 (Banco e parser) — PR 1 (DB) pronto pra push
 
 ---
 
 ## Resume here
 
-Verificação local **verde** (lint + typecheck + build). Próxima ação concreta
-é **criar o repo no GitHub e fazer o push inicial**, depois abrir e fechar a
-issue do milestone:
+Branch `feat/phase-1-db-schema` com DB completo (schema + migration +
+seed das 17 unidades + queries) verde local. Próxima ação:
 
 ```bash
 cd /Users/caiooliveirac/Projetos/TransportesSAMU
-
-# 1. Cria repo privado + push de main
-gh repo create caiooliveirac/Transportes-samu --private \
-  --source=. --remote=origin --push
-
-# 2. Abre issue do milestone com checklist (espelha os critérios abaixo)
-gh issue create --title "Fase 0 — Setup do monorepo" --body-file - <<'EOF'
-... checklist (copiar dos critérios de pronto desta página) ...
-EOF
-
-# 3. Fecha via commit
-git commit --allow-empty -m "docs: close phase 0 — Closes #1"
-git push
+git push -u origin feat/phase-1-db-schema
+gh pr create --base main --head feat/phase-1-db-schema --fill
 ```
 
-Depois disso: perguntar ao Caio se inicia Fase 1 (schema Drizzle + seed das
-unidades + parser determinístico).
+Depois do merge (squash ou regular, decisão do Caio):
 
-Se o ambiente for fresh clone:
 ```bash
-nvm use                              # carrega Node 25
-pnpm install
-pnpm setup:db                        # cria role + db local idempotente
-cp .env.example .env.local
-pnpm lint && pnpm typecheck && pnpm build   # gate Fase 0
+git checkout main && git pull
+git checkout -b feat/phase-1-parser
+# PR2: normalize → segment → 10 extractors → resolve → score
+# + 8 fixtures novos + .expected.json
+# + vitest com @vitest/coverage-v8 ≥80%
+# + pnpm parser:test <arquivo> CLI
 ```
+
+Issue #2 ("Fase 1 — Banco e parser") é umbrella; PR1 referencia, PR2
+fecha via `Closes #2`.
+
+Se ambiente fresh:
+```bash
+pnpm install
+pnpm setup:db && pnpm db:migrate && pnpm db:seed
+cp .env.example .env.local
+pnpm lint && pnpm typecheck && pnpm build
+```
+
+## Fase 1 — PR 1 (DB) — critérios de pronto
+
+- [x] Schema Drizzle: units, whatsapp_messages, transport_requests, transport_events, users
+- [x] Enums (transport_status, trip_type, unit_type) derivados de `@samu-cru/shared`
+- [x] Migration `0000_lovely_pete_wisdom.sql` gerada e aplica limpo em `samu_cru_dev`
+- [x] Seed das 17 unidades idempotente (`pnpm db:seed`)
+- [x] Queries tipadas: `listAllUnits`, `findUnitByCode`, `insertTransport`, `findTransportsByWhatsappMessage`, `findTransportById`, `listPendingReview`
+- [x] `pnpm db:seed` no root
+- [x] `loadMonorepoEnv` resolvido para drizzle-kit + migrate + seed funcionarem da raiz
+- [x] lint + typecheck + build verde
+- [ ] PR aberto e merged
+
+## Fase 1 — PR 2 (parser) — critérios de pronto
+
+- [ ] `normalize.ts`, `segment.ts`, `confidence.ts`
+- [ ] 10 extractors + `inferTripType`
+- [ ] 8 fixtures novos com `.expected.json`
+- [ ] Vitest + `@vitest/coverage-v8` ≥80%
+- [ ] CLI `pnpm parser:test <arquivo>`
+- [ ] PR aberto e merged
+- [ ] Issue #2 fechada via `Closes #2`
 
 ## Fase 0 — critérios de pronto (PLANNING §15)
 
@@ -80,6 +100,15 @@ pnpm lint && pnpm typecheck && pnpm build   # gate Fase 0
 | 12 | `1a52b17` | docs: add README and WORKLOG with phase 0 status |
 | 13 | `5522b70` | fix: simplify TS resolution and unblock lint/build |
 | 14 | `7a63edd` | chore: add pnpm lockfile |
+| 15 | `946b06b` | docs: close phase 0 — Closes #1 |
+
+### Fase 1 — PR 1 (`feat/phase-1-db-schema`)
+
+| # | Hash | Subject |
+|---|---|---|
+| 1 | `aee014d` | feat(db): add drizzle schema and 0000 migration |
+| 2 | `d03caeb` | feat(db): add idempotent unit seed script |
+| 3 | `0f6eec7` | feat(db): add typed query helpers for units and transports |
 
 ## Decisões deliberadas desta fase
 
