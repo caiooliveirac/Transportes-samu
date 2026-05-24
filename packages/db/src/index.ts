@@ -12,4 +12,6 @@ export type {
   NewTransportEvent,
   User,
   NewUser,
+  WorkerHeartbeat,
+  NewWorkerHeartbeat,
 } from "./schema";

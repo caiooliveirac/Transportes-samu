@@ -190,6 +190,26 @@ export const transportEvents = pgTable(
   }),
 );
 
+/* ─── worker_heartbeat ───────────────────────────────────────────────────
+ * UPSERT a cada 30s pelo worker Baileys (apps/ingest). O dashboard lê o
+ * registro mais recente para mostrar o indicador 🟢/🔴 de ingestão
+ * (PLANNING §12). worker_id permite ter mais de uma instância no futuro;
+ * para o MVP usamos "local-dev" ou WORKER_ID via env.
+ * ──────────────────────────────────────────────────────────────────────── */
+export const workerHeartbeat = pgTable("worker_heartbeat", {
+  id: serial("id").primaryKey(),
+  workerId: varchar("worker_id", { length: 64 }).notNull().unique(),
+  /** "connecting" | "open" | "closed" | "logged_out" */
+  status: varchar("status", { length: 32 }).notNull(),
+  lastSeen: timestamp("last_seen", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  meta: jsonb("meta"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 /* ─── Inferred types ─────────────────────────────────────────────────── */
 export type Unit = typeof units.$inferSelect;
 export type NewUnit = typeof units.$inferInsert;
@@ -201,3 +221,5 @@ export type TransportEvent = typeof transportEvents.$inferSelect;
 export type NewTransportEvent = typeof transportEvents.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type WorkerHeartbeat = typeof workerHeartbeat.$inferSelect;
+export type NewWorkerHeartbeat = typeof workerHeartbeat.$inferInsert;
