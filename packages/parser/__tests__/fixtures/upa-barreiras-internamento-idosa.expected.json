@@ -1,0 +1,17 @@
+{
+  "receivedAt": "2026-05-24T17:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Francisca de Oliveira" },
+    "patientAgeYears": { "equals": 79 },
+    "patientCns": { "equals": "700000000000001" },
+    "originUnitCode": { "equals": "upa_barreiras" },
+    "destination": { "includes": "Manoel Victorino" },
+    "procedure": { "includes": "Internamento" },
+    "tripType": { "equals": "one_way" },
+    "deadlineLocal": "19:30",
+    "vitals": { "pa": "100/70", "fc": 96, "fr": 20, "spo2": 95, "glasgow": 14, "temp": 37.8 },
+    "diagnosesIncludes": ["ITU complicada"],
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.85
+  }
+}

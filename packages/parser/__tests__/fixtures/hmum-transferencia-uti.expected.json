@@ -1,0 +1,16 @@
+{
+  "receivedAt": "2026-05-24T09:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Anderson Cruz" },
+    "patientAgeYears": { "equals": 44 },
+    "patientCns": { "equals": "704123456789012" },
+    "originUnitCode": { "equals": "hmum" },
+    "destination": { "includes": "Ana Nery" },
+    "procedure": { "includes": "Transfer" },
+    "tripType": { "equals": "one_way" },
+    "deadlineLocal": "11:00",
+    "vitals": { "pa": "85/50", "fc": 132, "fr": 26, "spo2": 92, "glasgow": 11, "temp": 37.9 },
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.8
+  }
+}

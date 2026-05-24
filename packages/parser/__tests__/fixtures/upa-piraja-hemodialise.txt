@@ -1,0 +1,16 @@
+*HEMODIÁLISE — RECORRENTE*
+UPA PIRAJÁ
+
+Paciente: Edmilson Tavares, 62a
+CNS 704987654321098
+
+Destino: Hospital Ana Nery
+Motivo: Hemodiálise (paciente regular)
+Tipo: ida e volta
+
+Horário: 07:30
+DATA: 25/05/2026
+
+PA 130x80 · FC 84 · FR 16 · SpO2 96% · GCS 15 · Tax 36,3
+
+Téc. enf. Maria

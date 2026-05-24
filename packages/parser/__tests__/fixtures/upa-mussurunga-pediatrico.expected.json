@@ -1,0 +1,16 @@
+{
+  "receivedAt": "2026-05-24T13:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Beatriz Lopes" },
+    "patientAgeYears": { "equals": 8 },
+    "originUnitCode": { "equals": "pa_mussurunga", "minConfidence": 0.6 },
+    "destination": { "includes": "Couto Maia" },
+    "procedure": { "includes": "Internamento" },
+    "tripType": { "equals": "one_way" },
+    "deadlineLocal": "16:00",
+    "vitals": { "pa": "95/60", "fc": 138, "fr": 30, "spo2": 94, "glasgow": 15, "temp": 38.4 },
+    "diagnosesIncludes": ["pneumonia comunitária", "bronquiolite"],
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.8
+  }
+}

@@ -1,0 +1,15 @@
+*APOIO TRANSPORTE*
+UPA LIBERDADE
+
+Paciente: Carla Tavares, 39a
+CPF: 123.456.789-00
+
+Destino: Hospital Sta. Izabel
+Motivo: Consulta ginecológica
+Tipo: ida e volta
+
+CHEGAR ATÉ 15:00
+
+PA 128/82 FC 92 FR 18 SatO2 98% GCS 15 Tax 36,5
+
+Enf. plantão

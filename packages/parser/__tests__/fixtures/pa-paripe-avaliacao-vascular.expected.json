@@ -1,0 +1,15 @@
+{
+  "receivedAt": "2026-05-24T15:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Fernando Sá", "minConfidence": 0.6 },
+    "patientAgeYears": { "equals": 47 },
+    "originUnitCode": { "equals": "pa_paripe" },
+    "destination": { "includes": "portugues" },
+    "procedure": { "includes": "avalia" },
+    "tripType": { "equals": "round_trip" },
+    "deadlineLocal": "18:00",
+    "vitals": { "pa": "135/85", "fc": 88, "fr": 18, "spo2": 97, "glasgow": 15, "temp": 36.8 },
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.7
+  }
+}
