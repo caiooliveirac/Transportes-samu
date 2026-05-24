@@ -3,32 +3,44 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-05-24 · Fase 0 (Setup do monorepo) — em verificação final
+**Última atualização:** 2026-05-24 · Fase 0 (Setup do monorepo) — concluída local, aguardando push
 
 ---
 
 ## Resume here
 
-A próxima ação concreta é **rodar a bateria de verificação local e fazer push
-inicial pro GitHub**:
+Verificação local **verde** (lint + typecheck + build). Próxima ação concreta
+é **criar o repo no GitHub e fazer o push inicial**, depois abrir e fechar a
+issue do milestone:
 
 ```bash
 cd /Users/caiooliveirac/Projetos/TransportesSAMU
-pnpm install
-pnpm setup:db                      # cria role + db local
-cp .env.example .env.local
-pnpm lint && pnpm typecheck && pnpm build
-gh repo create caiooliveirac/Transportes-samu --private --source=. --remote=origin --push
+
+# 1. Cria repo privado + push de main
+gh repo create caiooliveirac/Transportes-samu --private \
+  --source=. --remote=origin --push
+
+# 2. Abre issue do milestone com checklist (espelha os critérios abaixo)
+gh issue create --title "Fase 0 — Setup do monorepo" --body-file - <<'EOF'
+... checklist (copiar dos critérios de pronto desta página) ...
+EOF
+
+# 3. Fecha via commit
+git commit --allow-empty -m "docs: close phase 0 — Closes #1"
+git push
 ```
 
-Depois de tudo verde:
-1. Abrir issue "Fase 0 — Setup do monorepo" via `gh issue create`, com
-   checklist espelhando os critérios de pronto (abaixo).
-2. Fechar a issue via commit `docs: close phase 0 — Closes #1`
-3. Perguntar ao Caio se inicia Fase 1.
+Depois disso: perguntar ao Caio se inicia Fase 1 (schema Drizzle + seed das
+unidades + parser determinístico).
 
-Se `pnpm install` falhar pelo `engines` mismatch e o ambiente estiver em
-Node < 22, instale via nvm (`nvm install 25 && nvm use 25`).
+Se o ambiente for fresh clone:
+```bash
+nvm use                              # carrega Node 25
+pnpm install
+pnpm setup:db                        # cria role + db local idempotente
+cp .env.example .env.local
+pnpm lint && pnpm typecheck && pnpm build   # gate Fase 0
+```
 
 ## Fase 0 — critérios de pronto (PLANNING §15)
 
@@ -46,8 +58,8 @@ Node < 22, instale via nvm (`nvm install 25 && nvm use 25`).
 - [x] `scripts/setup-db.sh` idempotente
 - [x] Scripts raiz: `dev`, `build`, `lint`, `typecheck`, `format`, `db:*`, `setup:db`
 - [x] README "retomada por IA"
-- [ ] `pnpm install && pnpm lint && pnpm typecheck && pnpm build` passa limpo  ← próximo passo
-- [ ] Repo no GitHub `caiooliveirac/Transportes-samu` (privado) criado e push de `main`
+- [x] `pnpm install && pnpm lint && pnpm typecheck && pnpm build` passa limpo
+- [ ] Repo no GitHub `caiooliveirac/Transportes-samu` (privado) criado e push de `main`  ← próximo passo
 - [ ] Issue do milestone aberta no GitHub e fechada via commit
 
 ## Commits da Fase 0 (cronológico)
@@ -65,7 +77,9 @@ Node < 22, instale via nvm (`nvm install 25 && nvm use 25`).
 | 9 | `cd32877` | feat(web): init shadcn/ui and render token-driven placeholder home |
 | 10 | `eba060a` | feat(ingest): scaffold apps/ingest worker placeholder |
 | 11 | `f7d70e4` | chore: add env.example, db setup script, and root npm scripts wiring |
-| 12 | (próximo) | docs: add README and WORKLOG with phase 0 status |
+| 12 | `1a52b17` | docs: add README and WORKLOG with phase 0 status |
+| 13 | `5522b70` | fix: simplify TS resolution and unblock lint/build |
+| 14 | `7a63edd` | chore: add pnpm lockfile |
 
 ## Decisões deliberadas desta fase
 
@@ -85,6 +99,18 @@ Node < 22, instale via nvm (`nvm install 25 && nvm use 25`).
    Tailwind por status), UNITS (17 com aliases para fuzzy matching),
    DESTINOS, types, constants. Drizzle vai derivar pgEnum a partir das
    tuplas literais aqui — single source of truth.
+6. **`moduleResolution: Bundler` no `tsconfig.base.json`, sem composite/
+   project references.** Forçar `.js` em imports (`NodeNext`) funciona em
+   TS mas quebra `next build` no webpack. `Bundler` aceita imports
+   extensionless e funciona com tsx + Next + qualquer futuro bundler. O
+   pnpm workspace já resolve `@samu-cru/*` via symlink — não precisa de
+   composite/references. Documentado no commit `fix: simplify TS resolution
+   and unblock lint/build` (5522b70).
+7. **Sem `eslint-config-next` na flat config.** Next 15 emite warning
+   "plugin not detected" no `next build` mas não é erro. Integração da
+   eslint-config-next com flat config v9 ainda é desajeitada — entra como
+   melhoria opcional em fase posterior se quisermos as regras
+   next-específicas.
 
 ## Próximas fases (PLANNING §15)
 
