@@ -13,7 +13,8 @@ export interface Segmented {
 }
 
 const BULLET_RE = /^[-*•·>]\s+/;
-const LABEL_RE = /^([A-Za-zÀ-ſ][A-Za-zÀ-ſ0-9 .]+?)\s*[:-]\s*(.+)$/;
+// Aceita `/` no label (mensagens reais usam "CPF/CNS:", "DATA/HORÁRIO:")
+const LABEL_RE = /^([A-Za-zÀ-ſ][A-Za-zÀ-ſ0-9 ./]+?)\s*[:-]\s*(.+)$/;
 
 export function segment(raw: string): Segmented {
   const normalized = normalize(raw);

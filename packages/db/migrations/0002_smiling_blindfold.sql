@@ -1,0 +1,1 @@
+ALTER TABLE "transport_requests" ALTER COLUMN "procedure_time" SET DATA TYPE text;
