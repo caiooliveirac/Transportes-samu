@@ -1,0 +1,21 @@
+{
+  "name": "@samu-cru/ingest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@samu-cru/db": "workspace:*",
+    "@samu-cru/parser": "workspace:*",
+    "@samu-cru/shared": "workspace:*",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}
