@@ -9,6 +9,7 @@ import { DetailSheet } from "./detail-sheet";
 import { stripAccents } from "@/lib/format-internal";
 import type { DashboardData, SerializedTransport } from "@/lib/dashboard-types";
 import { isOverdue, isTerminal, isUrgent } from "@/lib/urgency";
+import { useLiveDashboard } from "@/hooks/use-live-dashboard";
 
 interface DashboardShellProps {
   initial: DashboardData;
@@ -35,41 +36,43 @@ function isToday(iso: string | null, refIso: string): boolean {
 }
 
 export function DashboardShell({ initial }: DashboardShellProps) {
+  const { data, status: liveStatus } = useLiveDashboard(initial);
+
   const [filter, setFilter] = useState<FilterId>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const now = useMemo(() => new Date(initial.serverTime), [initial.serverTime]);
+  const now = useMemo(() => new Date(data.serverTime), [data.serverTime]);
 
   const filtered = useMemo(() => {
-    return initial.transports.filter((t) => {
+    return data.transports.filter((t) => {
       if (!matchesQuery(t, query)) return false;
       switch (filter) {
         case "all":
           return true;
         case "today":
-          return isToday(t.deadlineAt, initial.serverTime);
+          return isToday(t.deadlineAt, data.serverTime);
         case "overdue":
           return isOverdue(t.deadlineAt, t.status, now);
         case "pending":
           return t.status === "pendente_revisao";
       }
     });
-  }, [filter, initial.serverTime, initial.transports, now, query]);
+  }, [filter, data.serverTime, data.transports, now, query]);
 
   const counts = useMemo(() => {
     let active = 0;
     let urgent = 0;
     let pending = 0;
     let overdue = 0;
-    for (const t of initial.transports) {
+    for (const t of data.transports) {
       if (!isTerminal(t.status)) active++;
       if (isOverdue(t.deadlineAt, t.status, now)) overdue++;
       if (isUrgent(t.deadlineAt, t.status, now)) urgent++;
       if (t.status === "pendente_revisao") pending++;
     }
     return { active, urgent: urgent + overdue, overdue, pending };
-  }, [initial.transports, now]);
+  }, [data.transports, now]);
 
   const transportsByUnit = useMemo(() => {
     const map = new Map<string, SerializedTransport[]>();
@@ -81,12 +84,11 @@ export function DashboardShell({ initial }: DashboardShellProps) {
     return map;
   }, [filtered]);
 
-  // Ordenar colunas por densidade (mais ativos à esquerda) — PLANNING §9.
   const orderedUnits = useMemo(() => {
-    return [...initial.units]
+    return [...data.units]
       .map((u) => ({ unit: u, items: transportsByUnit.get(u.code) ?? [] }))
       .sort((a, b) => b.items.length - a.items.length);
-  }, [initial.units, transportsByUnit]);
+  }, [data.units, transportsByUnit]);
 
   const handleSelect = useCallback((id: string) => setSelectedId(id), []);
   const handleClose = useCallback(() => setSelectedId(null), []);
@@ -100,7 +102,7 @@ export function DashboardShell({ initial }: DashboardShellProps) {
           onFilterChange={setFilter}
           query={query}
           onQueryChange={setQuery}
-          workerOnline={null}
+          liveStatus={liveStatus}
         />
 
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
