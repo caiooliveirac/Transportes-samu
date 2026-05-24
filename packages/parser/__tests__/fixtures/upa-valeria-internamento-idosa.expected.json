@@ -4,7 +4,7 @@
     "patientName": { "equals": "Francisca de Oliveira" },
     "patientAgeYears": { "equals": 79 },
     "patientCns": { "equals": "700000000000001" },
-    "originUnitCode": { "equals": "upa_barreiras" },
+    "originUnitCode": { "equals": "upa_valeria" },
     "destination": { "includes": "Manoel Victorino" },
     "procedure": { "includes": "Internamento" },
     "tripType": { "equals": "one_way" },

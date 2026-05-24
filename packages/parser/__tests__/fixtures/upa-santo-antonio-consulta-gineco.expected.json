@@ -4,7 +4,7 @@
     "patientName": { "equals": "Carla Tavares" },
     "patientAgeYears": { "equals": 39 },
     "patientCpf": { "equals": "12345678900" },
-    "originUnitCode": { "equals": "upa_liberdade" },
+    "originUnitCode": { "equals": "upa_santo_antonio" },
     "destination": { "includes": "Izabel" },
     "procedure": { "includes": "Consulta" },
     "tripType": { "equals": "round_trip" },

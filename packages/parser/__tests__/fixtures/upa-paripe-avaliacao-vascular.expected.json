@@ -3,7 +3,7 @@
   "expect": {
     "patientName": { "equals": "Fernando Sá", "minConfidence": 0.6 },
     "patientAgeYears": { "equals": 47 },
-    "originUnitCode": { "equals": "pa_paripe" },
+    "originUnitCode": { "equals": "upa_paripe" },
     "destination": { "includes": "portugues" },
     "procedure": { "includes": "avalia" },
     "tripType": { "equals": "round_trip" },

@@ -91,9 +91,9 @@ describe("extractOrigin", () => {
   });
 
   it("handles missing diacritics", () => {
-    const seg = segment("UPA CAJAZEIRAS\n...");
+    const seg = segment("UPA SANTO ANTONIO\n...");
     const r = extractOrigin(seg);
-    expect(r.value).toBe("upa_cajazeiras");
+    expect(r.value).toBe("upa_santo_antonio");
   });
 
   it("matches HMUM alias", () => {

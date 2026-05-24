@@ -4,7 +4,7 @@
     "patientName": { "equals": "Paulo Henrique Costa" },
     "patientAgeYears": { "equals": 28 },
     "patientCns": { "equals": "198023456701234" },
-    "originUnitCode": { "equals": "upa_cajazeiras", "minConfidence": 0.8 },
+    "originUnitCode": { "equals": "upa_helio_machado", "minConfidence": 0.8 },
     "destination": { "includes": "Geral do Estado" },
     "procedure": { "includes": "Trauma" },
     "tripType": { "equals": "one_way" },
