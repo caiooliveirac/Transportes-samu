@@ -3,7 +3,7 @@
 // Cada extrator é função pura testável que retorna Extracted<T>.
 // O agregador produz ParseResult e decide status novo vs pendente_revisao.
 
-export * from "./types.js";
+export * from "./types";
 
 /**
  * Stub do parser. Implementação real entra na Fase 1.

@@ -9,7 +9,6 @@
     "allowJs": false,
     "noEmit": true,
     "incremental": true,
-    "composite": false,
     "isolatedModules": true,
     "resolveJsonModule": true,
     "plugins": [{ "name": "next" }],
@@ -23,9 +22,5 @@
     "src/**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", ".next", "out"],
-  "references": [
-    { "path": "../../packages/shared" },
-    { "path": "../../packages/db" }
-  ]
+  "exclude": ["node_modules", ".next", "out"]
 }

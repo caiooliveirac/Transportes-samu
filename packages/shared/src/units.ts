@@ -1,4 +1,4 @@
-import type { UnitType } from "./enums.js";
+import type { UnitType } from "./enums";
 
 export interface UnitSeed {
   code: string;

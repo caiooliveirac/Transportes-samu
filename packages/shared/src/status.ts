@@ -1,4 +1,4 @@
-import type { TransportStatus } from "./enums.js";
+import type { TransportStatus } from "./enums";
 
 export interface StatusMeta {
   key: TransportStatus;
