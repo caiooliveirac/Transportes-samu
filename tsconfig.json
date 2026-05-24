@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/web" },
+    { "path": "./apps/ingest" },
+    { "path": "./packages/db" },
+    { "path": "./packages/parser" },
+    { "path": "./packages/shared" }
+  ]
+}
