@@ -132,7 +132,10 @@ export const transportRequests = pgTable(
     // Procedimento e timing
     procedure: text("procedure").notNull(),
     procedureDate: date("procedure_date"),
-    procedureTime: varchar("procedure_time", { length: 32 }),
+    /** Texto bruto do horário/janela. Pode ser longo (ex: "DATA/HORÁRIO
+     * DA APRESENTAÇÃO: IMEDIATA ATÉ 22H"). Era varchar(32) e dava
+     * overflow no INSERT — promovido para text. */
+    procedureTime: text("procedure_time"),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),
     tripType: tripTypeEnum("trip_type").notNull().default("unknown"),
 

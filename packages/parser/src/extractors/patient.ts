@@ -3,7 +3,14 @@ import { matchKey } from "../normalize";
 import { parseDate } from "./utils";
 import type { Extracted } from "../types";
 
-const PATIENT_KEYS = ["paciente", "pcte", "nome", "pte"];
+const PATIENT_KEYS = [
+  "paciente",
+  "pcte",
+  "nome",
+  "nome completo",
+  "nome do paciente",
+  "pte",
+];
 
 /**
  * extractName — busca no label "Paciente:/Pcte:/Nome:" primeiro; se não,
@@ -63,6 +70,22 @@ export function extractBirthDate(seg: Segmented): Extracted<Date> {
   return { value: null, confidence: 0 };
 }
 
+/**
+ * Label "CPF/CNS" é comum em mensagens reais — o emissor não sabe qual
+ * dos dois o paciente tem, joga ambos. Tentamos descobrir pelo número
+ * de dígitos (CNS=15, CPF=11). Retornado como par estruturado.
+ */
+function extractFromCompoundLabel(
+  seg: Segmented,
+): { cns: string | null; cpf: string | null } {
+  const compound = seg.labels.get("cpf/cns") ?? seg.labels.get("cns/cpf");
+  if (!compound) return { cns: null, cpf: null };
+  const digits = compound.replace(/\D/g, "");
+  if (digits.length === 15) return { cns: digits, cpf: null };
+  if (digits.length === 11) return { cns: null, cpf: digits };
+  return { cns: null, cpf: null };
+}
+
 /** CNS — 15 dígitos, após label CNS ou inline. Sem validação mod-11 no MVP. */
 export function extractCns(seg: Segmented): Extracted<string> {
   const val = seg.labels.get("cns");
@@ -71,6 +94,10 @@ export function extractCns(seg: Segmented): Extracted<string> {
     if (digits.length === 15) {
       return { value: digits, confidence: 0.95, raw: val };
     }
+  }
+  const compound = extractFromCompoundLabel(seg);
+  if (compound.cns) {
+    return { value: compound.cns, confidence: 0.9, raw: "CPF/CNS label" };
   }
   // Inline: linhas com "CNS" próximo de 15 dígitos
   for (const line of seg.lines) {
@@ -97,6 +124,10 @@ export function extractCpf(seg: Segmented): Extracted<string> {
     if (digits.length === 11) {
       return { value: digits, confidence: 0.95, raw: val };
     }
+  }
+  const compound = extractFromCompoundLabel(seg);
+  if (compound.cpf) {
+    return { value: compound.cpf, confidence: 0.9, raw: "CPF/CNS label" };
   }
   for (const line of seg.lines) {
     const m = line.match(/CPF[:\s]+(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/i);
