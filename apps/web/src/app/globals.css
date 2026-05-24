@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * @source: faz o Tailwind v4 escanear o pacote @samu-cru/shared, onde
+ * STATUS metadata expõe classes nomeadas como border-l-amber-500,
+ * bg-emerald-500/15, etc. Sem isso, o JIT não vê essas strings (porque
+ * são literais de TS, não JSX) e gera CSS faltando.
+ */
+@source "../../../../packages/shared/src/**/*.ts";
+
 @theme {
   /* Neutral ink scale — extracted from design tokens (DESIGN.md). */
   --color-ink-0: #0a0c10;
