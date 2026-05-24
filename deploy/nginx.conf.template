@@ -1,6 +1,6 @@
 # /etc/nginx/sites-available/transportes.mnrs.com.br
 #
-# Reverse proxy para o Next.js do transportes-samu (PM2 :3005).
+# Reverse proxy para o Next.js do transportes-samu (PM2 :3008).
 # SSE-friendly: buffering desligado em /api/stream pra eventos
 # chegarem instantâneo no cliente (PLANNING §9 + nosso PR 8).
 #
@@ -10,7 +10,7 @@
 #   sudo certbot --nginx -d transportes.mnrs.com.br
 
 upstream transportes_upstream {
-  server 127.0.0.1:3005;
+  server 127.0.0.1:3008;
   keepalive 32;
 }
 

@@ -12,7 +12,7 @@ set -euo pipefail
 APP_DIR="/home/ubuntu/transportes-samu"
 WEB_NAME="transportes-web"
 INGEST_NAME="transportes-ingest"
-HEALTH_URL="http://127.0.0.1:3005/api/health"
+HEALTH_URL="http://127.0.0.1:3008/api/health"
 PUBLIC_URL="https://transportes.mnrs.com.br/api/health"
 
 info()  { echo "[deploy][INFO]  $*"; }

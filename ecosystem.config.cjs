@@ -2,7 +2,7 @@
  * PM2 config oficial pra produção (EC2 transportes.mnrs.com.br).
  *
  * Dois processos no mesmo checkout:
- *   - transportes-web      Next.js standalone server (porta 3005)
+ *   - transportes-web      Next.js standalone server (porta 3008)
  *   - transportes-ingest   Worker Baileys (sem porta — só Postgres + WhatsApp)
  *
  * Ambos carregam /home/ubuntu/transportes-samu/.env.production via env_file
@@ -24,7 +24,7 @@ module.exports = {
       args: "--filter @samu-cru/web start",
       env: {
         NODE_ENV: "production",
-        PORT: "3005",
+        PORT: "3008",
         RUNTIME_SOURCE_OF_TRUTH: "pm2",
         GIT_COMMIT_SHA: process.env.GIT_COMMIT_SHA || "unknown",
       },
