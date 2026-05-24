@@ -1,8 +1,12 @@
 // Placeholder home — proves the design pipeline is wired (Tailwind v4
-// @theme tokens, Inter + JetBrains Mono via next/font, dark-by-default).
-// Real dashboard lands in Phase 2 per PLANNING §15.
+// @theme tokens, Inter + JetBrains Mono via next/font, shadcn primitives,
+// dark-by-default). Real dashboard lands in Phase 2 per PLANNING §15.
 
+import { ArrowRight, HeartPulse } from "lucide-react";
 import { STATUS, type TransportStatus } from "@samu-cru/shared";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 const SHOWCASE_STATUSES: TransportStatus[] = [
   "novo",
@@ -14,17 +18,22 @@ const SHOWCASE_STATUSES: TransportStatus[] = [
 export default function Home() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-10 px-6 py-16">
-      <header className="space-y-2">
-        <p className="font-mono text-xs tracking-widest text-zinc-500 uppercase">
-          Fase 0 · placeholder
-        </p>
+      <header className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-rose-500 to-amber-500">
+            <HeartPulse className="h-4 w-4 text-white" strokeWidth={2.25} />
+          </span>
+          <Badge variant="outline" className="font-mono">
+            Fase 0 · v0.0.0
+          </Badge>
+        </div>
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">
           SAMU/CRU · Transportes
         </h1>
         <p className="text-zinc-400">
-          Painel operacional para regulação de transportes inter-unidades. Tela
-          real entra na Fase 2 — esta página existe para validar que o pipeline
-          visual (Tailwind v4, tokens do design, fontes) está montado.
+          Painel operacional para regulação de transportes inter-unidades. Esta
+          página existe para validar o pipeline visual; o dashboard real entra
+          na Fase 2.
         </p>
       </header>
 
@@ -55,11 +64,7 @@ export default function Home() {
         <div className="grid grid-cols-7 gap-2">
           {(["0", "50", "100", "150", "200", "300", "400"] as const).map(
             (step) => (
-              <div
-                key={step}
-                className="flex flex-col items-center gap-1"
-                style={{ color: "#d6dbe6" }}
-              >
+              <div key={step} className="flex flex-col items-center gap-1">
                 <div
                   className="h-12 w-full rounded ring-1 ring-white/5"
                   style={{ background: `var(--color-ink-${step})` }}
@@ -70,6 +75,22 @@ export default function Home() {
               </div>
             ),
           )}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <p className="font-mono text-[10.5px] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+          shadcn/ui — primitivos disponíveis
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button>
+            Abrir painel <ArrowRight />
+          </Button>
+          <Button variant="secondary">Pendente revisão</Button>
+          <Button variant="outline">Filtros</Button>
+          <Button variant="ghost" size="sm">
+            Ver fixtures
+          </Button>
         </div>
       </section>
 
