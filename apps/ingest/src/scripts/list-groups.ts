@@ -48,9 +48,11 @@ async function listAndExit(sock: WASocket): Promise<void> {
     logger.error({ err }, "failed to fetch groups");
   } finally {
     shuttingDown = true;
-    await sock.logout().catch(() => {
-      /* já encerrando */
-    });
+    // IMPORTANTE: sock.end() apenas fecha o WebSocket. sock.logout()
+    // DESAUTENTICA o aparelho no servidor WhatsApp — usar logout aqui
+    // forçaria QR novo no próximo `pnpm dev:ingest`. Bug histórico
+    // identificado depois do primeiro teste com o chefe.
+    sock.end(undefined);
     process.exit(0);
   }
 }
