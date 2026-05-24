@@ -10,6 +10,7 @@ import { stripAccents } from "@/lib/format-internal";
 import type { DashboardData, SerializedTransport } from "@/lib/dashboard-types";
 import { isOverdue, isTerminal, isUrgent } from "@/lib/urgency";
 import { useLiveDashboard } from "@/hooks/use-live-dashboard";
+import { useWorkerStatus } from "@/hooks/use-worker-status";
 
 interface DashboardShellProps {
   initial: DashboardData;
@@ -37,6 +38,7 @@ function isToday(iso: string | null, refIso: string): boolean {
 
 export function DashboardShell({ initial }: DashboardShellProps) {
   const { data, status: liveStatus } = useLiveDashboard(initial);
+  const workerHealth = useWorkerStatus();
 
   const [filter, setFilter] = useState<FilterId>("all");
   const [query, setQuery] = useState("");
@@ -103,6 +105,7 @@ export function DashboardShell({ initial }: DashboardShellProps) {
           query={query}
           onQueryChange={setQuery}
           liveStatus={liveStatus}
+          workerHealth={workerHealth}
         />
 
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
