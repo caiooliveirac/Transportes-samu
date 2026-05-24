@@ -20,7 +20,8 @@ export function extractVitals(seg: Segmented): Extracted<Vitals> {
   const fr = text.match(/\bFR\s*[:=]?\s*(\d{1,3})\b/i);
   if (fr) vitals.fr = parseInt(fr[1]!, 10);
 
-  const spo2 = text.match(/\b(?:Sp\s*O2|Sat\s*O2|spo2|sat)\s*[:=]?\s*(\d{2,3})\s*%?/i);
+  // Aceita "Sat:", "Sat.:", "Sat. ", "SatO2 " etc.
+  const spo2 = text.match(/\b(?:Sp\s*O2|Sat\s*O2|spo2|sat)[.\s]*[:=]?\s*(\d{2,3})\s*%?/i);
   if (spo2) {
     const v = parseInt(spo2[1]!, 10);
     if (v >= 50 && v <= 100) vitals.spo2 = v;

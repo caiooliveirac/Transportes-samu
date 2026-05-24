@@ -3,10 +3,13 @@ import type { Extracted } from "../types";
 
 const DEST_KEYS = [
   "destino",
+  "dest",
   "hospital de destino",
+  "hospital destino",
   "encaminhar para",
   "encaminhamento",
-  "hospital destino",
+  "referencia",
+  "referência",
 ];
 
 export function extractDestination(seg: Segmented): Extracted<string> {
