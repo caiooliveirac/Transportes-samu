@@ -8,6 +8,13 @@
       "when": 1779645964104,
       "tag": "0000_lovely_pete_wisdom",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779650213925,
+      "tag": "0001_lucky_vector",
+      "breakpoints": true
     }
   ]
 }

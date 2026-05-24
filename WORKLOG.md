@@ -3,34 +3,87 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-05-24 · Fase 2 (Dashboard read-only) — PR 3 (realtime) pronto pra push; PR 1+2 merged
+**Última atualização:** 2026-05-24 · Fase 3 (Worker Baileys) — PR pronto pra push; Fase 2 fechada
 
 ---
 
 ## Resume here
 
-Branch `feat/phase-2-realtime` com SSE `/api/stream` + hook
-`useLiveDashboard` + LiveBadge no header — completa o ciclo da Fase 2.
-Verificado end-to-end:
+Branch `feat/phase-3-baileys-worker` com worker completo + WorkerBadge
+no header. Próxima ação: push + PR + merge (Closes #9), depois teste
+real com o celular do chefe (instruções abaixo).
 
 ```bash
-gtimeout 12 curl -sN http://localhost:3000/api/stream
-# event: hello + event: tick a cada 5s ✓
-# psql UPDATE → event: change em < 5s ✓
-```
-
-Próxima ação:
-
-```bash
-cd /Users/caiooliveirac/Projetos/TransportesSAMU
-git push -u origin feat/phase-2-realtime
-gh pr create ... # Closes #5
+git push -u origin feat/phase-3-baileys-worker
+gh pr create ... # Closes #9
 gh pr merge ... --merge --delete-branch
 ```
 
-Após merge: **Fase 2 está fechada**. Próximo grande bloco é **Fase 3
-(Baileys worker)** — primeiro clonar `caiooliveirac/giro-de-leitos` em
-`/tmp` e estudar padrões de sessão/reconexão/handlers (PLANNING §12).
+### Teste real com o celular do chefe — Fase 3
+
+```bash
+git pull
+pnpm install
+pnpm db:migrate    # aplica 0001_lucky_vector.sql (worker_heartbeat)
+
+# 1) Descobrir o JID do grupo de regulação:
+pnpm ingest:list-groups
+# → renderiza QR no terminal
+# → CHEFE escaneia (WhatsApp → Aparelhos conectados → Conectar)
+# → após conectar, imprime lista de grupos com JID, nome, n participantes
+# → copiar o JID do grupo de regulação SAMU/CRU (formato 120363XXX@g.us)
+# → script encerra sozinho
+
+# 2) Configurar .env.local:
+echo "WA_ALLOWED_CHATS=120363XXXXXXXXX@g.us" >> .env.local
+
+# 3) Iniciar worker em uma aba:
+pnpm dev:ingest
+# → sessão de auth/ persiste do passo 1; conecta direto sem novo QR
+# → loga "WhatsApp connected" e começa a escutar
+# → worker_heartbeat status="open" UPSERT a cada 30s
+
+# 4) Iniciar dashboard em outra aba:
+pnpm dev
+
+# 5) Abrir http://localhost:3000 — WorkerBadge no header deve ficar
+#    VERDE "Worker ok" (heartbeat fresh)
+
+# 6) CHEFE envia uma mensagem de transporte real no grupo, ex:
+#    "*SOLICITAÇÃO DE TRANSPORTE*
+#     UPA PIRAJÁ
+#     Paciente: Fulano de Tal, 65a
+#     Destino: H. Manoel Victorino
+#     Motivo: Internamento
+#     CHEGAR ATÉ 18:00"
+
+# 7) Esperado em < 10s:
+#    - Worker loga "transport candidate received" + "transport created"
+#    - whatsapp_messages e transport_requests recebem novas linhas
+#    - SSE detecta max(updated_at) avançou → emite `change`
+#    - Dashboard refaz fetch e o card aparece na coluna UPA Pirajá
+```
+
+### Quando a sessão precisa ser refeita
+
+- Se o WhatsApp desvincular o dispositivo (chefe foi em "Aparelhos
+  conectados" e desconectou), worker fica em `logged_out` e auth/ é
+  limpo automaticamente. Pare o worker, rode `pnpm ingest:list-groups`
+  de novo, novo QR.
+- A pasta `apps/ingest/auth/` é gitignored — backup criptografado é
+  responsabilidade do operador em prod (Fase 6).
+
+### Limitações conhecidas
+
+- Worker em desenvolvimento local — quando matar o terminal, ingestão
+  para. EC2 com PM2 (Fase 6) corrige.
+- Sem retry / outbox em caso de DB cair durante ingestão — perde a
+  mensagem se o worker já marcou o waMessageId no Set in-memory.
+  Mitigação: reinicia o worker (Set zera), próxima mensagem do mesmo
+  ID será reentrada via Baileys history se ainda estiver na queue.
+- Pairing code remoto não implementado (giro-de-leitos tem; só vale
+  quando worker está numa máquina remota e a gente quer reconectar
+  sem ter que SSH-ar para escanear QR). Adicionar na Fase 6 deploy.
 
 ### Como o Caio testa este PR
 
@@ -83,6 +136,24 @@ Esperado em `/`:
 - [x] Smoke E2E: home renderiza, /api/transports retorna 17+22, detail Sheet carrega vitals/diagnoses/mensagem WhatsApp original
 - [ ] PR aberto e merged
 
+## Fase 3 — Worker Baileys — critérios de pronto
+
+- [x] Tabela `worker_heartbeat` + queries `upsertWorkerHeartbeat`, `getLatestWorkerHeartbeat`; migration `0001_lucky_vector.sql`
+- [x] `apps/ingest/src/whatsapp/{client,auth-state,connection,reconnect}.ts` baseados em `giro-de-leitos/whatsapp-bridge`
+- [x] `apps/ingest/src/pipeline/{filter,dedupe,ingest}.ts` — heurística `looksLikeTransport`, Set bounded de wa_message_id, ON CONFLICT DO NOTHING idempotência
+- [x] `apps/ingest/src/whatsapp/messages.ts` registra `messages.upsert` (whitelist + parser + insert) e `messages.update` (re-parse + UPDATE)
+- [x] `apps/ingest/src/heartbeat.ts` UPSERT 30s + extra beat em transição de status
+- [x] `apps/ingest/src/scripts/list-groups.ts` standalone para descobrir JID
+- [x] Logger pino com redactor de PII (rawText, patientName, patientCns, patientCpf)
+- [x] `pnpm dev:ingest` + `pnpm ingest:list-groups` scripts no root
+- [x] `apps/web/src/app/api/health/worker/route.ts` retorna last heartbeat + secondsSince
+- [x] `useWorkerStatus` hook (polling 15s) + `WorkerBadge` no header
+- [x] `.env.example` documenta WORKER_ID, WA_SESSION_DIR, WA_ALLOWED_CHATS, DRY_RUN, LOG_LEVEL
+- [x] Smoke local: worker arranca, renderiza QR, escreve heartbeat connecting; `/api/health/worker` retorna OK
+- [ ] PR aberto e merged
+- [ ] Issue #9 fechada via `Closes #9`
+- [ ] **Teste real com celular do chefe** — depende do usuário (vide instruções acima)
+
 ## Fase 2 — PR 3 (real-time) — critérios de pronto
 
 - [x] SSE `/api/stream` com eventos `hello` / `tick` / `change`. Detecção de mudança via `max(updated_at)` (Phase 3 troca por LISTEN/NOTIFY)
@@ -91,8 +162,8 @@ Esperado em `/`:
 - [x] `LiveBadge` no header: sse (verde pulsando) / polling (âmbar) / connecting (cinza) / offline (rose). Tooltip com idade do último evento
 - [x] Tab visibility integration: refetch imediato ao voltar foco no tab
 - [x] Smoke E2E: `event: change` emitido < 5s após UPDATE no DB
-- [ ] PR aberto e merged
-- [ ] Issue #5 fechada via `Closes #5`
+- [x] PR aberto e merged (#8)
+- [x] Issue #5 fechada via `Closes #5`
 
 ## Fase 1 — PR 1 (DB) — critérios de pronto
 
@@ -194,13 +265,21 @@ Esperado em `/`:
 | 6 | `c89137d` | feat(web): add DetailSheet with ROTA, CLÍNICA, HIPÓTESES, TIMELINE, mensagem original |
 | 7 | `04143f1` | feat(web): wire dashboard page and GET /api/transports/[id] |
 
-### Fase 2 — PR 3 (`feat/phase-2-realtime`)
+### Fase 2 — PR 3 (`feat/phase-2-realtime`) — merged via `337d522`
 
 | # | Hash | Subject |
 |---|---|---|
 | 1 | `916eb69` | feat(web): add SSE /api/stream endpoint with hello/tick/change events |
 | 2 | `d7c3113` | feat(web): add useLiveDashboard hook (SSE + polling fallback) |
 | 3 | `efe6616` | feat(web): wire live updates via SSE + polling fallback, replace stub dot |
+
+### Fase 3 — Worker Baileys (`feat/phase-3-baileys-worker`)
+
+| # | Hash | Subject |
+|---|---|---|
+| 1 | `4a91a00` | feat(db): add worker_heartbeat table and queries |
+| 2 | `5b613ee` | feat(ingest): full Baileys worker — connection, pipeline, heartbeat |
+| 3 | `4977123` | feat(web): add WorkerBadge in header reading worker_heartbeat |
 
 ## Decisões deliberadas desta fase
 

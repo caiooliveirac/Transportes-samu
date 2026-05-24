@@ -4,7 +4,9 @@ import { useEffect, useRef } from "react";
 import { Heart, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LiveBadge } from "./live-badge";
+import { WorkerBadge } from "./worker-badge";
 import type { LiveStatus } from "@/hooks/use-live-dashboard";
+import type { WorkerHealth } from "@/hooks/use-worker-status";
 
 export type FilterId = "all" | "today" | "overdue" | "pending";
 
@@ -23,6 +25,8 @@ interface HeaderProps {
   onQueryChange: (q: string) => void;
   /** Estado da conexão SSE/polling (substitui o stub gray do PR2). */
   liveStatus: LiveStatus;
+  /** Saúde do worker Baileys (Fase 3 — `useWorkerStatus`). */
+  workerHealth: WorkerHealth;
 }
 
 interface FilterPill {
@@ -39,6 +43,7 @@ export function DashboardHeader({
   query,
   onQueryChange,
   liveStatus,
+  workerHealth,
 }: HeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -150,6 +155,7 @@ export function DashboardHeader({
         </button>
 
         <LiveBadge status={liveStatus} />
+        <WorkerBadge health={workerHealth} />
       </div>
     </header>
   );

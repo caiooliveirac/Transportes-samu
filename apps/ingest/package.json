@@ -7,15 +7,21 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "list-groups": "tsx src/scripts/list-groups.ts"
   },
   "dependencies": {
     "@samu-cru/db": "workspace:*",
     "@samu-cru/parser": "workspace:*",
     "@samu-cru/shared": "workspace:*",
-    "dotenv": "^16.4.7"
+    "@whiskeysockets/baileys": "^6.7.16",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.36.4",
+    "pino": "^9.6.0",
+    "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
+    "@types/qrcode-terminal": "^0.12.2",
     "tsx": "^4.19.2"
   }
 }
