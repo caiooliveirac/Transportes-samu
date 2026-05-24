@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /*
  * @source: faz o Tailwind v4 escanear o pacote @samu-cru/shared, onde
