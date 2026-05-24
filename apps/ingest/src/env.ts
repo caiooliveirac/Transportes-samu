@@ -14,8 +14,15 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..", "..", "..");
 
-config({ path: resolve(root, ".env.local"), override: false });
-config({ path: resolve(root, ".env"), override: false });
+// Em produção (NODE_ENV=production), .env.production tem prioridade.
+// Em dev, .env.local. .env como fallback comum.
+const envFiles =
+  process.env.NODE_ENV === "production"
+    ? [".env.production", ".env.local", ".env"]
+    : [".env.local", ".env"];
+for (const name of envFiles) {
+  config({ path: resolve(root, name), override: false });
+}
 
 function required(name: string): string {
   const v = process.env[name];
