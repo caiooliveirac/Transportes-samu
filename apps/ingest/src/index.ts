@@ -1,24 +1,78 @@
-import "dotenv/config";
+/**
+ * Worker SAMU/CRU — Baileys → parser → Postgres.
+ *
+ * Cycle:
+ *   1. Carrega env, abre socket Baileys.
+ *   2. Espera QR (primeira execução) ou pega sessão existente.
+ *   3. Registra handlers de connection (QR + reconnect) e mensagens
+ *      (whitelist + parser + insert).
+ *   4. Heartbeat UPSERT a cada 30s em worker_heartbeat.
+ *   5. Em close não-loggedOut, agenda reconnect com backoff exponencial
+ *      e recria a sessão. Em loggedOut, limpa auth e exige QR novo.
+ *
+ * Encerra limpo em SIGINT/SIGTERM — fecha heartbeat e socket.
+ */
+import "./env";
+import { ENV } from "./env";
+import { logger } from "./logger";
+import { setWorkerStatus, startHeartbeat, stopHeartbeat } from "./heartbeat";
+import { createSession, type BaileysSession } from "./whatsapp/client";
+import { registerConnectionHandlers } from "./whatsapp/connection";
+import { registerMessageHandlers } from "./whatsapp/messages";
 
-// TODO Fase 3 (PLANNING §12): bootstrap Baileys worker.
-//   - useMultiFileAuthState pointing at apps/ingest/auth/ (gitignored)
-//   - whitelist via WA_ALLOWED_CHATS env
-//   - messages.upsert handler → @samu-cru/parser → @samu-cru/db insert
-//   - messages.update handler → re-parse + UPDATE preserving manual edits
-//   - heartbeat to worker_heartbeat table every 30s
-//   - reconnection with exponential backoff (1s→2s→4s…60s),
-//     STOP on DisconnectReason.loggedOut
-//
-// Before implementing, clone caiooliveirac/giro-de-leitos to /tmp and
-// study its session, reconnect, and handler patterns. Reuse what is
-// already validated in production.
+let activeSession: BaileysSession | null = null;
+let shuttingDown = false;
 
-async function main() {
-  console.log("[ingest] Phase 3 placeholder — worker not implemented yet.");
-  console.log("[ingest] See PLANNING.md §12 and design-refs for context.");
+async function bootstrap(): Promise<void> {
+  if (shuttingDown) return;
+  if (activeSession) {
+    logger.debug("session already active, skipping bootstrap");
+    return;
+  }
+
+  logger.info(
+    {
+      workerId: ENV.workerId,
+      sessionDir: ENV.sessionDir,
+      allowedChats: ENV.allowedChats,
+      dryRun: ENV.dryRun,
+    },
+    "starting SAMU/CRU ingest worker",
+  );
+
+  const session = await createSession();
+  activeSession = session;
+
+  registerConnectionHandlers(session.sock, session.auth, {
+    onStatusChange: setWorkerStatus,
+    onReconnectRequest: () => {
+      activeSession = null;
+      void bootstrap();
+    },
+    onLoggedOut: () => {
+      activeSession = null;
+      logger.error(
+        "session logged out — restart the worker after re-scanning QR",
+      );
+    },
+  });
+
+  registerMessageHandlers(session.sock);
 }
 
-main().catch((err) => {
-  console.error("[ingest] fatal:", err);
+function handleShutdown(signal: NodeJS.Signals): void {
+  logger.info({ signal }, "shutdown requested, closing session");
+  shuttingDown = true;
+  stopHeartbeat();
+  void activeSession?.sock.end(undefined);
+  process.exit(0);
+}
+
+process.on("SIGINT", handleShutdown);
+process.on("SIGTERM", handleShutdown);
+
+startHeartbeat();
+bootstrap().catch((err) => {
+  logger.error({ err }, "fatal during bootstrap");
   process.exit(1);
 });
