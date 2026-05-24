@@ -3,42 +3,55 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-05-24 · Fase 2 (Dashboard read-only) — PR 1 (backend) pronto pra push; Fase 1 fechada (#2)
+**Última atualização:** 2026-05-24 · Fase 2 (Dashboard read-only) — PR 2 (UI) pronto pra push; PR 1 merged
 
 ---
 
 ## Resume here
 
-Branch `feat/phase-2-mock-seed-and-api` com seed mock + query agregada +
-GET `/api/transports` verde local. Próxima ação:
+Branch `feat/phase-2-dashboard-ui` com painel completo (Header + colunas
++ cards + Sheet de detalhes + filtros + busca + atalhos) verde local.
+Próxima ação:
 
 ```bash
 cd /Users/caiooliveirac/Projetos/TransportesSAMU
-git push -u origin feat/phase-2-mock-seed-and-api
-gh pr create --base main --head feat/phase-2-mock-seed-and-api ...
-gh pr merge ... --merge --delete-branch
+git push -u origin feat/phase-2-dashboard-ui
+gh pr create ... --merge --delete-branch
 ```
 
 Depois do merge:
 
 ```bash
 git checkout main && git pull
-git checkout -b feat/phase-2-dashboard-ui
-# PR2: header global, multi-coluna por unidade, card 48-56px,
-# filtros pills, busca, Sheet de detalhes (read-only)
+git checkout -b feat/phase-2-realtime
+# PR3: SSE /api/stream + cliente patch otimista + fallback polling
+# Closes #5 no último commit
 ```
 
-Issue #5 ("Fase 2 — Dashboard read-only") é umbrella; PR 3 (real-time
-SSE) fecha via `Closes #5`.
+### Como o Caio testa este PR
 
-Se ambiente fresh:
 ```bash
-pnpm install
-pnpm setup:db && pnpm db:migrate && pnpm db:seed && pnpm db:seed:mock
-cp .env.example .env.local
-pnpm lint && pnpm typecheck && pnpm build && pnpm test
-pnpm dev   # http://localhost:3000/api/transports retorna {units, transports, serverTime}
+pnpm install                # adiciona Radix Dialog/Tooltip + tw-animate-css
+pnpm db:seed:mock           # se ainda não rodou; idempotente
+pnpm dev                    # http://localhost:3000
 ```
+
+Esperado em `/`:
+- Header dark "SAMU/CRU · Transportes" + contagem "X ativos · N urgentes"
+- 4 pills de filtro (Tudo / Hoje / Atrasados / Pendentes revisão)
+- Busca com atalho `/` (foca o input ao apertar barra)
+- Botão "+ Novo" disabled (Fase 4)
+- Bola colorida do worker WhatsApp (cinza, Fase 3 liga)
+- 10 colunas por unidade (UPA San Martin vazia intencionalmente)
+- Cards 48-56px com borda lateral colorida por status
+- Cards atrasados pulsam (animate-card-pulse) e mostram relógio ⏰ piscando
+- Card cancelado riscado
+- Concluído antigo fade
+- Tooltip ao hover do card mostra "Maria S. · Status · em 22min"
+- Clique em qualquer card abre Sheet 480px da direita com ROTA/CLÍNICA/HIPÓTESES/TIMELINE
+- Botões [revelar]/[copiar] CNS
+- "Mostrar texto bruto" expande mensagem WhatsApp original (apenas em Pirajá e Brotas, os 2 com WA real)
+- Esc fecha Sheet
 
 ## Fase 2 — PR 1 (backend) — critérios de pronto
 
@@ -54,13 +67,17 @@ pnpm dev   # http://localhost:3000/api/transports retorna {units, transports, se
 
 ## Fase 2 — PR 2 (UI) — critérios de pronto
 
-- [ ] Header global (logo, contagem viva, pills, busca, worker badge stub)
-- [ ] Grid multi-coluna por unidade com header sticky
-- [ ] Card compacto 48-56px com borda lateral de status
-- [ ] Estados: novo, em deslocamento, atrasado pulsando, concluído fade, cancelado riscado, pendente revisao
-- [ ] Sheet de detalhes (ROTA / CLÍNICA / HIPÓTESES / TIMELINE / Mensagem original)
-- [ ] Atalhos: `/` busca, `Esc` fecha
-- [ ] Mobile: empilhado
+- [x] Header global (logo, contagem viva, pills, busca com `/`, worker badge stub, +Novo disabled)
+- [x] Grid multi-coluna por unidade com header sticky + barra de carga
+- [x] Card compacto com borda lateral de status, ícone trip-type, tooltip privacy-safe
+- [x] Estados: novo, em deslocamento, atrasado pulsando, concluído fade, cancelado riscado, pendente revisao com warnings
+- [x] Sheet de detalhes (ROTA / CLÍNICA / HIPÓTESES / TIMELINE / Mensagem original colapsável)
+- [x] CNS mascarado + [revelar]/[copiar]
+- [x] Atalhos: `/` foca busca, `Esc` fecha Sheet
+- [x] Mobile: básico funcional (responsive); polimento mobile fica para Fase 7
+- [x] Gate verde (lint + typecheck + build + 52/52 testes)
+- [x] Smoke E2E: home renderiza, /api/transports retorna 17+22, detail Sheet carrega vitals/diagnoses/mensagem WhatsApp original
+- [ ] PR aberto e merged
 
 ## Fase 2 — PR 3 (real-time) — critérios de pronto
 
@@ -147,9 +164,26 @@ pnpm dev   # http://localhost:3000/api/transports retorna {units, transports, se
 | 2 | `ab24b2a` | test(parser): add 10 fixtures with declarative expected.json |
 | 3 | `14702d0` | feat(parser): add vitest suite, CLI, and fix regex bugs surfaced by fixtures |
 
-### Fase 2 — PR 1 (`feat/phase-2-mock-seed-and-api`)
+### Fase 2 — PR 1 (`feat/phase-2-mock-seed-and-api`) — merged via `76c32fe`
 
-Em progresso (sequência de commits abaixo).
+| # | Hash | Subject |
+|---|---|---|
+| 1 | `60258fc` | feat(db): add idempotent mock transport seed for dashboard dev |
+| 2 | `2581391` | feat(db): add dashboard query and lazy client init |
+| 3 | `b16e49f` | feat(web): add GET /api/transports and load .env.local from monorepo root |
+| 4 | `86e348a` | docs(worklog): record phase 2 PR 1 (backend) progress |
+
+### Fase 2 — PR 2 (`feat/phase-2-dashboard-ui`)
+
+| # | Hash | Subject |
+|---|---|---|
+| 1 | `6def045` | chore(web): teach tailwind v4 to scan @samu-cru/shared |
+| 2 | `e566a60` | feat(web): add shadcn Sheet, Tooltip + tw-animate-css |
+| 3 | `1d9dff3` | feat(web): add format/urgency helpers and StatusPill + EmptyState |
+| 4 | `e845ea7` | feat(web): add TransportCard and UnitColumn components |
+| 5 | `42a4353` | feat(web): add dashboard Header and DashboardShell with filter/search state |
+| 6 | `c89137d` | feat(web): add DetailSheet with ROTA, CLÍNICA, HIPÓTESES, TIMELINE, mensagem original |
+| 7 | `04143f1` | feat(web): wire dashboard page and GET /api/transports/[id] |
 
 ## Decisões deliberadas desta fase
 
