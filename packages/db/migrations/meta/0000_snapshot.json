@@ -1,0 +1,654 @@
+{
+  "id": "95f2cbae-b701-4490-9bbd-ec77c86fc624",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.transport_events": {
+      "name": "transport_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "transport_id": {
+          "name": "transport_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_value": {
+          "name": "from_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_value": {
+          "name": "to_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "transport_events_transport_idx": {
+          "name": "transport_events_transport_idx",
+          "columns": [
+            {
+              "expression": "transport_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transport_events_kind_idx": {
+          "name": "transport_events_kind_idx",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "transport_events_transport_id_transport_requests_id_fk": {
+          "name": "transport_events_transport_id_transport_requests_id_fk",
+          "tableFrom": "transport_events",
+          "tableTo": "transport_requests",
+          "columnsFrom": [
+            "transport_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "transport_events_user_id_users_id_fk": {
+          "name": "transport_events_user_id_users_id_fk",
+          "tableFrom": "transport_events",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.transport_requests": {
+      "name": "transport_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "whatsapp_message_id": {
+          "name": "whatsapp_message_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "patient_name": {
+          "name": "patient_name",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "patient_birth_date": {
+          "name": "patient_birth_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "patient_age_text": {
+          "name": "patient_age_text",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "patient_cns": {
+          "name": "patient_cns",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "patient_cpf": {
+          "name": "patient_cpf",
+          "type": "varchar(14)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "origin_unit_id": {
+          "name": "origin_unit_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "origin_unit_raw": {
+          "name": "origin_unit_raw",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination_name": {
+          "name": "destination_name",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "procedure": {
+          "name": "procedure",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "procedure_date": {
+          "name": "procedure_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "procedure_time": {
+          "name": "procedure_time",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deadline_at": {
+          "name": "deadline_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trip_type": {
+          "name": "trip_type",
+          "type": "trip_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "vitals": {
+          "name": "vitals",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "diagnoses": {
+          "name": "diagnoses",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "transport_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'novo'"
+        },
+        "parse_confidence": {
+          "name": "parse_confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "parse_warnings": {
+          "name": "parse_warnings",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "transport_requests_status_idx": {
+          "name": "transport_requests_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transport_requests_origin_idx": {
+          "name": "transport_requests_origin_idx",
+          "columns": [
+            {
+              "expression": "origin_unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transport_requests_deadline_idx": {
+          "name": "transport_requests_deadline_idx",
+          "columns": [
+            {
+              "expression": "deadline_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transport_requests_created_at_idx": {
+          "name": "transport_requests_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "transport_requests_whatsapp_message_id_whatsapp_messages_id_fk": {
+          "name": "transport_requests_whatsapp_message_id_whatsapp_messages_id_fk",
+          "tableFrom": "transport_requests",
+          "tableTo": "whatsapp_messages",
+          "columnsFrom": [
+            "whatsapp_message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transport_requests_origin_unit_id_units_id_fk": {
+          "name": "transport_requests_origin_unit_id_units_id_fk",
+          "tableFrom": "transport_requests",
+          "tableTo": "units",
+          "columnsFrom": [
+            "origin_unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.units": {
+      "name": "units",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "unit_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_origin": {
+          "name": "is_origin",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "aliases": {
+          "name": "aliases",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "units_code_unique": {
+          "name": "units_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'regulador'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.whatsapp_messages": {
+      "name": "whatsapp_messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "wa_message_id": {
+          "name": "wa_message_id",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wa_chat_id": {
+          "name": "wa_chat_id",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wa_sender_id": {
+          "name": "wa_sender_id",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raw_text": {
+          "name": "raw_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_json": {
+          "name": "raw_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "edited_at": {
+          "name": "edited_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "whatsapp_messages_received_at_idx": {
+          "name": "whatsapp_messages_received_at_idx",
+          "columns": [
+            {
+              "expression": "received_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "whatsapp_messages_wa_message_id_unique": {
+          "name": "whatsapp_messages_wa_message_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "wa_message_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.transport_status": {
+      "name": "transport_status",
+      "schema": "public",
+      "values": [
+        "pendente_revisao",
+        "novo",
+        "aguardando_viatura",
+        "viatura_designada",
+        "em_deslocamento_origem",
+        "paciente_embarcado",
+        "em_deslocamento_destino",
+        "chegou_destino",
+        "retornando_origem",
+        "concluido",
+        "cancelado"
+      ]
+    },
+    "public.trip_type": {
+      "name": "trip_type",
+      "schema": "public",
+      "values": [
+        "one_way",
+        "round_trip",
+        "unknown"
+      ]
+    },
+    "public.unit_type": {
+      "name": "unit_type",
+      "schema": "public",
+      "values": [
+        "UPA",
+        "PA",
+        "HOSPITAL",
+        "OUTRO"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
