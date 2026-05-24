@@ -1,27 +1,39 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import postgres, { type Sql } from "postgres";
 import * as schema from "./schema";
 
-function readDatabaseUrl(): string {
+type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+
+let _sql: Sql | null = null;
+let _db: DrizzleDb | null = null;
+
+/**
+ * Conexão Postgres + Drizzle lazy. A inicialização **não** acontece no load
+ * do módulo porque o webpack do Next.js coleta page data no build e nem
+ * sempre tem DATABASE_URL nesse contexto — diferir até a primeira query
+ * evita esse acoplamento.
+ */
+export function getDb(): DrizzleDb {
+  if (_db) return _db;
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
-      "DATABASE_URL is required — copy .env.example to .env.local and set it",
+      "DATABASE_URL is required — copy .env.example to .env.local at the repo root",
     );
   }
-  return url;
+  _sql = postgres(url, { max: 10, idle_timeout: 20, connect_timeout: 10 });
+  _db = drizzle(_sql, { schema });
+  return _db;
 }
 
 /**
- * Singleton Postgres client per process. Reuse across the web app and the
- * ingest worker — both share the same pool when they import @samu-cru/db.
+ * Façade do drizzle db — propriedades resolvidas lazy via Proxy para
+ * preservar a API existente (`db.select(...)`, `db.insert(...)`).
  */
-const queryClient = postgres(readDatabaseUrl(), {
-  max: 10,
-  idle_timeout: 20,
-  connect_timeout: 10,
+export const db: DrizzleDb = new Proxy({} as DrizzleDb, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getDb(), prop, receiver);
+  },
 });
 
-export const db = drizzle(queryClient, { schema });
-
-export type Database = typeof db;
+export type Database = DrizzleDb;
