@@ -1,0 +1,16 @@
+{
+  "receivedAt": "2026-05-24T13:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Carla Tavares" },
+    "patientAgeYears": { "equals": 39 },
+    "patientCpf": { "equals": "12345678900" },
+    "originUnitCode": { "equals": "upa_liberdade" },
+    "destination": { "includes": "Izabel" },
+    "procedure": { "includes": "Consulta" },
+    "tripType": { "equals": "round_trip" },
+    "deadlineLocal": "15:00",
+    "vitals": { "pa": "128/82", "fc": 92, "fr": 18, "spo2": 98, "glasgow": 15, "temp": 36.5 },
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.8
+  }
+}

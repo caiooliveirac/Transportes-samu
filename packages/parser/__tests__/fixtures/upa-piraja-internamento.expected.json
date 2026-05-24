@@ -1,0 +1,17 @@
+{
+  "receivedAt": "2026-05-24T11:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Maria das Graças Souza" },
+    "patientAgeYears": { "equals": 67 },
+    "patientCns": { "equals": "704003089240528" },
+    "originUnitCode": { "equals": "upa_piraja", "minConfidence": 0.8 },
+    "destination": { "includes": "Manoel Victorino", "minConfidence": 0.85 },
+    "procedure": { "includes": "Internamento" },
+    "tripType": { "equals": "one_way" },
+    "deadlineLocal": "14:30",
+    "vitals": { "pa": "150/95", "fc": 112, "fr": 22, "spo2": 93, "glasgow": 14, "temp": 38.1 },
+    "diagnosesIncludes": ["pneumonia"],
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.8
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "receivedAt": "2026-05-25T05:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Edmilson Tavares" },
+    "patientAgeYears": { "equals": 62 },
+    "patientCns": { "equals": "704987654321098" },
+    "originUnitCode": { "equals": "upa_piraja" },
+    "destination": { "includes": "Ana Nery" },
+    "procedure": { "includes": "Hemodi" },
+    "tripType": { "equals": "round_trip" },
+    "deadlineLocal": "07:30",
+    "vitals": { "pa": "130/80", "fc": 84, "fr": 16, "spo2": 96, "glasgow": 15, "temp": 36.3 },
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.85
+  }
+}

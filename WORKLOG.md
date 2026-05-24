@@ -3,41 +3,33 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-05-24 · Fase 1 (Banco e parser) — PR 1 (DB) pronto pra push
+**Última atualização:** 2026-05-24 · Fase 1 (Banco e parser) — PR 2 (parser) pronto pra push; PR 1 já merged
 
 ---
 
 ## Resume here
 
-Branch `feat/phase-1-db-schema` com DB completo (schema + migration +
-seed das 17 unidades + queries) verde local. Próxima ação:
+Branch `feat/phase-1-parser` com parser completo (normalize + segment +
+11 extractors + resolve + score + 10 fixtures + 52 testes ≥80% coverage
++ CLI `pnpm parser:test`). Tudo verde local. Próxima ação:
 
 ```bash
 cd /Users/caiooliveirac/Projetos/TransportesSAMU
-git push -u origin feat/phase-1-db-schema
-gh pr create --base main --head feat/phase-1-db-schema --fill
+git push -u origin feat/phase-1-parser
+gh pr create --base main --head feat/phase-1-parser \
+  --title "feat(parser): phase 1 PR 2 — deterministic pipeline, 10 fixtures, 52 tests, CLI" \
+  --body "..." # ver script abaixo
 ```
 
-Depois do merge (squash ou regular, decisão do Caio):
-
-```bash
-git checkout main && git pull
-git checkout -b feat/phase-1-parser
-# PR2: normalize → segment → 10 extractors → resolve → score
-# + 8 fixtures novos + .expected.json
-# + vitest com @vitest/coverage-v8 ≥80%
-# + pnpm parser:test <arquivo> CLI
-```
-
-Issue #2 ("Fase 1 — Banco e parser") é umbrella; PR1 referencia, PR2
-fecha via `Closes #2`.
+Após merge do PR2: issue #2 fecha automaticamente via `Closes #2` no
+último commit. Pular para Fase 2 (painel multi-coluna).
 
 Se ambiente fresh:
 ```bash
 pnpm install
 pnpm setup:db && pnpm db:migrate && pnpm db:seed
 cp .env.example .env.local
-pnpm lint && pnpm typecheck && pnpm build
+pnpm lint && pnpm typecheck && pnpm build && pnpm test
 ```
 
 ## Fase 1 — PR 1 (DB) — critérios de pronto
@@ -54,11 +46,12 @@ pnpm lint && pnpm typecheck && pnpm build
 
 ## Fase 1 — PR 2 (parser) — critérios de pronto
 
-- [ ] `normalize.ts`, `segment.ts`, `confidence.ts`
-- [ ] 10 extractors + `inferTripType`
-- [ ] 8 fixtures novos com `.expected.json`
-- [ ] Vitest + `@vitest/coverage-v8` ≥80%
-- [ ] CLI `pnpm parser:test <arquivo>`
+- [x] `normalize.ts`, `segment.ts`, `confidence.ts`
+- [x] 11 extractors (name/age/birthDate/cns/cpf/origin/destination/procedure/timeText/deadline/procedureDate/vitals/diagnoses) + `inferTripType`
+- [x] 10 fixtures totais (2 prévios + 8 novos) com `.expected.json`
+- [x] Vitest + `@vitest/coverage-v8` — 93.55% stmt, 90.81% branch, 100% fn (acima dos thresholds 80/80/80/70)
+- [x] CLI `pnpm parser:test <arquivo>` com output colorido
+- [x] Gate verde (lint + typecheck + build + 52/52 testes)
 - [ ] PR aberto e merged
 - [ ] Issue #2 fechada via `Closes #2`
 
@@ -102,13 +95,21 @@ pnpm lint && pnpm typecheck && pnpm build
 | 14 | `7a63edd` | chore: add pnpm lockfile |
 | 15 | `946b06b` | docs: close phase 0 — Closes #1 |
 
-### Fase 1 — PR 1 (`feat/phase-1-db-schema`)
+### Fase 1 — PR 1 (`feat/phase-1-db-schema`) — merged via `5fce97b`
 
 | # | Hash | Subject |
 |---|---|---|
 | 1 | `aee014d` | feat(db): add drizzle schema and 0000 migration |
 | 2 | `d03caeb` | feat(db): add idempotent unit seed script |
 | 3 | `0f6eec7` | feat(db): add typed query helpers for units and transports |
+
+### Fase 1 — PR 2 (`feat/phase-1-parser`)
+
+| # | Hash | Subject |
+|---|---|---|
+| 1 | `2d49481` | feat(parser): implement deterministic pipeline — normalize, segment, 11 extractors, scoring |
+| 2 | `ab24b2a` | test(parser): add 10 fixtures with declarative expected.json |
+| 3 | `14702d0` | feat(parser): add vitest suite, CLI, and fix regex bugs surfaced by fixtures |
 
 ## Decisões deliberadas desta fase
 

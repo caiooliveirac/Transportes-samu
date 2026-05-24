@@ -1,0 +1,13 @@
+HMUM - Hospital Municipal de Salvador
+
+Paciente: Anderson Cruz, 44 anos
+CNS 704123456789012
+
+Destino: Hospital Ana Nery
+Motivo: Transferência UTI — pós-PCR
+
+CHEGAR ATÉ 11:00
+
+PA 85/50 · FC 132 · FR 26 · SpO2 92% AA · GCS 11 · Tax 37,9
+
+Plantonista

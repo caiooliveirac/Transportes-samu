@@ -23,6 +23,7 @@
     "db:seed": "pnpm --filter @samu-cru/db seed",
     "db:studio": "pnpm --filter @samu-cru/db studio",
     "test": "pnpm -r --if-present test",
+    "parser:test": "pnpm --filter @samu-cru/parser cli",
     "setup:db": "bash scripts/setup-db.sh"
   },
   "devDependencies": {

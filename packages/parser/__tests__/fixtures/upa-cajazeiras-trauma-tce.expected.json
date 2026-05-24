@@ -1,0 +1,17 @@
+{
+  "receivedAt": "2026-05-24T11:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Paulo Henrique Costa" },
+    "patientAgeYears": { "equals": 28 },
+    "patientCns": { "equals": "198023456701234" },
+    "originUnitCode": { "equals": "upa_cajazeiras", "minConfidence": 0.8 },
+    "destination": { "includes": "Geral do Estado" },
+    "procedure": { "includes": "Trauma" },
+    "tripType": { "equals": "one_way" },
+    "deadlineLocal": "13:45",
+    "vitals": { "pa": "90/55", "fc": 130, "fr": 28, "spo2": 91, "glasgow": 9, "temp": 36.2 },
+    "diagnosesIncludes": ["TCE grave"],
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.85
+  }
+}

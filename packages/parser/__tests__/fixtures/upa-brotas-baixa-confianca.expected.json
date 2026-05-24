@@ -1,0 +1,13 @@
+{
+  "receivedAt": "2026-05-24T11:00:00Z",
+  "expect": {
+    "patientName": { "equals": "Diogo Vasconcelos", "minConfidence": 0.6 },
+    "patientAgeYears": { "equals": 36 },
+    "originUnitCode": { "equals": "upa_brotas", "minConfidence": 0.7 },
+    "destination": { "warningContains": "alternative", "minConfidence": 0 },
+    "tripType": { "equals": "round_trip" },
+    "vitals": { "pa": "160/100", "fc": 105, "fr": 20, "spo2": 95, "glasgow": 14 },
+    "suggestedStatus": "pendente_revisao",
+    "maxGlobalConfidence": 0.74
+  }
+}
