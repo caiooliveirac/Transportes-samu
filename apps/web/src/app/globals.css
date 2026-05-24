@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  /* Neutral ink scale — extracted from design tokens (DESIGN.md). */
+  --color-ink-0: #0a0c10;
+  --color-ink-50: #0d1015;
+  --color-ink-100: #11151c;
+  --color-ink-150: #161b24;
+  --color-ink-200: #1c2230;
+  --color-ink-300: #252c3c;
+  --color-ink-400: #323a4d;
+
+  /* Typography — Inter for UI, JetBrains Mono for clinical data. */
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Animations specific to this product (DESIGN.md). */
+  --animate-ping-slow: ping-slow 1.8s ease-in-out infinite;
+  --animate-card-pulse: card-pulse 1.8s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+}
+
+@keyframes ping-slow {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes card-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.82;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    background: var(--color-ink-0);
+    color: #d6dbe6;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings:
+      "cv11",
+      "ss01",
+      "ss03";
+  }
+
+  ::selection {
+    background: #38bdf833;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #ffffff14;
+    border-radius: 8px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #ffffff22;
+  }
+}
