@@ -89,6 +89,18 @@ export async function findTransportWithContext(id: string): Promise<{
 }
 
 /**
+ * "Versão" do estado do painel — ISO da maior updated_at em
+ * transport_requests. Usado pelo SSE pra detectar mudança sem precisar
+ * de LISTEN/NOTIFY (PLANNING §9). Cheap: max() em coluna indexada.
+ */
+export async function getMaxTransportUpdatedAt(): Promise<string> {
+  const [row] = await db
+    .select({ max: sql<Date | null>`max(${transportRequests.updatedAt})` })
+    .from(transportRequests);
+  return row?.max ? new Date(row.max).toISOString() : "0";
+}
+
+/**
  * Phase 2 fila de revisão.
  */
 export async function listPendingReview(): Promise<TransportRequest[]> {

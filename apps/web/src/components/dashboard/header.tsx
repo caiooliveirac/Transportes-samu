@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import { Heart, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LiveBadge } from "./live-badge";
+import type { LiveStatus } from "@/hooks/use-live-dashboard";
 
 export type FilterId = "all" | "today" | "overdue" | "pending";
 
@@ -19,8 +21,8 @@ interface HeaderProps {
   onFilterChange: (id: FilterId) => void;
   query: string;
   onQueryChange: (q: string) => void;
-  /** Phase 3 vai ligar isto ao heartbeat real do worker. */
-  workerOnline?: boolean | null;
+  /** Estado da conexão SSE/polling (substitui o stub gray do PR2). */
+  liveStatus: LiveStatus;
 }
 
 interface FilterPill {
@@ -36,7 +38,7 @@ export function DashboardHeader({
   onFilterChange,
   query,
   onQueryChange,
-  workerOnline = null,
+  liveStatus,
 }: HeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -147,23 +149,7 @@ export function DashboardHeader({
           Novo
         </button>
 
-        <span
-          className={cn(
-            "inline-flex h-2 w-2 rounded-full",
-            workerOnline === null
-              ? "bg-zinc-600"
-              : workerOnline
-                ? "animate-ping-slow bg-emerald-500"
-                : "bg-rose-500",
-          )}
-          title={
-            workerOnline === null
-              ? "Worker WhatsApp (Fase 3)"
-              : workerOnline
-                ? "Online"
-                : "Offline"
-          }
-        />
+        <LiveBadge status={liveStatus} />
       </div>
     </header>
   );
