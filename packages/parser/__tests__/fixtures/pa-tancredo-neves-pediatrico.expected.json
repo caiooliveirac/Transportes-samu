@@ -3,7 +3,7 @@
   "expect": {
     "patientName": { "equals": "Beatriz Lopes" },
     "patientAgeYears": { "equals": 8 },
-    "originUnitCode": { "equals": "pa_mussurunga", "minConfidence": 0.6 },
+    "originUnitCode": { "equals": "pa_tancredo_neves", "minConfidence": 0.6 },
     "destination": { "includes": "Couto Maia" },
     "procedure": { "includes": "Internamento" },
     "tripType": { "equals": "one_way" },

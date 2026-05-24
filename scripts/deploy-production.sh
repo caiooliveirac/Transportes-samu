@@ -38,6 +38,14 @@ source .env.production
 set +a
 pnpm db:migrate
 
+# ─── DB seed (units canónicas) ────────────────────────────────────────────
+# Idempotente: ON CONFLICT (code) DO UPDATE preserva id+createdAt, atualiza
+# nome/aliases/displayOrder. Limpa órfãos quando seguro (sem FK refs).
+# Garante que mudanças em packages/shared/src/units.ts atinjam prod no
+# próximo deploy.
+info "seeding units"
+pnpm db:seed
+
 # ─── Build ────────────────────────────────────────────────────────────────
 info "building all workspaces"
 pnpm build
