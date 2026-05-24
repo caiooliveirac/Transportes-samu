@@ -3,30 +3,34 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-05-24 · Fase 2 (Dashboard read-only) — PR 2 (UI) pronto pra push; PR 1 merged
+**Última atualização:** 2026-05-24 · Fase 2 (Dashboard read-only) — PR 3 (realtime) pronto pra push; PR 1+2 merged
 
 ---
 
 ## Resume here
 
-Branch `feat/phase-2-dashboard-ui` com painel completo (Header + colunas
-+ cards + Sheet de detalhes + filtros + busca + atalhos) verde local.
+Branch `feat/phase-2-realtime` com SSE `/api/stream` + hook
+`useLiveDashboard` + LiveBadge no header — completa o ciclo da Fase 2.
+Verificado end-to-end:
+
+```bash
+gtimeout 12 curl -sN http://localhost:3000/api/stream
+# event: hello + event: tick a cada 5s ✓
+# psql UPDATE → event: change em < 5s ✓
+```
+
 Próxima ação:
 
 ```bash
 cd /Users/caiooliveirac/Projetos/TransportesSAMU
-git push -u origin feat/phase-2-dashboard-ui
-gh pr create ... --merge --delete-branch
+git push -u origin feat/phase-2-realtime
+gh pr create ... # Closes #5
+gh pr merge ... --merge --delete-branch
 ```
 
-Depois do merge:
-
-```bash
-git checkout main && git pull
-git checkout -b feat/phase-2-realtime
-# PR3: SSE /api/stream + cliente patch otimista + fallback polling
-# Closes #5 no último commit
-```
+Após merge: **Fase 2 está fechada**. Próximo grande bloco é **Fase 3
+(Baileys worker)** — primeiro clonar `caiooliveirac/giro-de-leitos` em
+`/tmp` e estudar padrões de sessão/reconexão/handlers (PLANNING §12).
 
 ### Como o Caio testa este PR
 
@@ -81,8 +85,13 @@ Esperado em `/`:
 
 ## Fase 2 — PR 3 (real-time) — critérios de pronto
 
-- [ ] SSE `/api/stream` com `transport.created`, `transport.updated`
-- [ ] Cliente patch otimista + fallback polling 10s
+- [x] SSE `/api/stream` com eventos `hello` / `tick` / `change`. Detecção de mudança via `max(updated_at)` (Phase 3 troca por LISTEN/NOTIFY)
+- [x] Hook `useLiveDashboard` consumido pelo `DashboardShell` — refetch automático em `change`, mantém `data` vivo
+- [x] Fallback polling 10s quando SSE cai (`EventSource.CLOSED`)
+- [x] `LiveBadge` no header: sse (verde pulsando) / polling (âmbar) / connecting (cinza) / offline (rose). Tooltip com idade do último evento
+- [x] Tab visibility integration: refetch imediato ao voltar foco no tab
+- [x] Smoke E2E: `event: change` emitido < 5s após UPDATE no DB
+- [ ] PR aberto e merged
 - [ ] Issue #5 fechada via `Closes #5`
 
 ## Fase 1 — PR 1 (DB) — critérios de pronto
@@ -173,7 +182,7 @@ Esperado em `/`:
 | 3 | `b16e49f` | feat(web): add GET /api/transports and load .env.local from monorepo root |
 | 4 | `86e348a` | docs(worklog): record phase 2 PR 1 (backend) progress |
 
-### Fase 2 — PR 2 (`feat/phase-2-dashboard-ui`)
+### Fase 2 — PR 2 (`feat/phase-2-dashboard-ui`) — merged via `cf252e4`
 
 | # | Hash | Subject |
 |---|---|---|
@@ -184,6 +193,14 @@ Esperado em `/`:
 | 5 | `42a4353` | feat(web): add dashboard Header and DashboardShell with filter/search state |
 | 6 | `c89137d` | feat(web): add DetailSheet with ROTA, CLÍNICA, HIPÓTESES, TIMELINE, mensagem original |
 | 7 | `04143f1` | feat(web): wire dashboard page and GET /api/transports/[id] |
+
+### Fase 2 — PR 3 (`feat/phase-2-realtime`)
+
+| # | Hash | Subject |
+|---|---|---|
+| 1 | `916eb69` | feat(web): add SSE /api/stream endpoint with hello/tick/change events |
+| 2 | `d7c3113` | feat(web): add useLiveDashboard hook (SSE + polling fallback) |
+| 3 | `efe6616` | feat(web): wire live updates via SSE + polling fallback, replace stub dot |
 
 ## Decisões deliberadas desta fase
 
