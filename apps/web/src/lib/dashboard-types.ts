@@ -11,11 +11,11 @@ import type {
  * `new Date(...)` quando precisa de objeto Date.
  */
 export type SerializedRow<T> = {
-  [K in keyof T]: T[K] extends Date | null
-    ? string | null
-    : T[K] extends Date
-      ? string
-      : T[K];
+  [K in keyof T]: NonNullable<T[K]> extends Date
+    ? null extends T[K]
+      ? string | null
+      : string
+    : T[K];
 };
 
 export type SerializedTransport = SerializedRow<TransportRequest>;
