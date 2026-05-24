@@ -13,19 +13,21 @@ export function extractName(seg: Segmented): Extracted<string> {
   for (const key of PATIENT_KEYS) {
     const val = seg.labels.get(key);
     if (!val) continue;
-    // Strip trailing age ", 67a" ou ", 36 anos" ou " 36a "
+    // Strip trailing age ", 67a" / ", 36 anos" / "36a (pediatrico)" e parentheticals.
     const name = val
       .replace(/,?\s*\d{1,3}\s*(a|anos?)\b\.?/i, "")
+      .replace(/\([^)]*\)/g, "")
       .replace(/[,;]+\s*$/, "")
+      .replace(/\s{2,}/g, " ")
       .trim();
     if (name.length >= 3 && /[A-Za-zÀ-ſ]/.test(name)) {
       return { value: name, confidence: 0.95, raw: val };
     }
   }
-  // Fallback em linha livre: "pcte NAME 36a"
+  // Fallback em linha livre: "pcte NAME 36a" ou "paciente NAME, 47a"
   for (const line of seg.lines) {
     const m = line.match(
-      /(?:pcte|paciente|pte)\s+([A-Za-zÀ-ſ][A-Za-zÀ-ſ' ]{2,80}?)\s+\d{1,3}\s*a/i,
+      /(?:pcte|paciente|pte)\s+([A-Za-zÀ-ſ][A-Za-zÀ-ſ' ]{2,80}?),?\s+\d{1,3}\s*a\b/i,
     );
     if (m) return { value: m[1]!.trim(), confidence: 0.75, raw: line };
   }
@@ -72,7 +74,7 @@ export function extractCns(seg: Segmented): Extracted<string> {
   }
   // Inline: linhas com "CNS" próximo de 15 dígitos
   for (const line of seg.lines) {
-    const m = line.match(/CNS[:\s]+([\d\s.\-]{15,30})/i);
+    const m = line.match(/CNS[:\s]+([\d\s.-]{15,30})/i);
     if (!m) continue;
     const digits = m[1]!.replace(/\D/g, "");
     if (digits.length === 15) {

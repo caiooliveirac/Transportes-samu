@@ -11,7 +11,7 @@ export function extractVitals(seg: Segmented): Extracted<Vitals> {
   const text = seg.normalized;
   const vitals: Vitals = {};
 
-  const pa = text.match(/\b(?:PA|TA)\s*[:=]?\s*(\d{2,3})\s*[x\/]\s*(\d{2,3})\b/i);
+  const pa = text.match(/\b(?:PA|TA)\s*[:=]?\s*(\d{2,3})\s*[x/]\s*(\d{2,3})\b/i);
   if (pa) vitals.pa = `${pa[1]}/${pa[2]}`;
 
   const fc = text.match(/\bFC\s*[:=]?\s*(\d{2,3})\b/i);

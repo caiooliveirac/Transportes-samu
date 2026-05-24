@@ -6,7 +6,7 @@ import { stripAccents } from "../normalize";
  * 30-99 como 19XX. Retorna Date UTC ou null.
  */
 export function parseDate(s: string): Date | null {
-  const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  const m = s.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
   if (!m) return null;
   const day = parseInt(m[1]!, 10);
   const month = parseInt(m[2]!, 10);

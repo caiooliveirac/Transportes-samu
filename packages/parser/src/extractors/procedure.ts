@@ -37,7 +37,7 @@ export function extractProcedure(seg: Segmented): Extracted<string> {
 export function inferTripType(procedure: string | null): Extracted<TripType> {
   if (!procedure) return { value: "unknown", confidence: 0 };
   const lower = procedure.toLowerCase();
-  if (/interna|transfer|admiss/.test(lower)) {
+  if (/interna|transfer|admiss|trauma|neurocir|cir(urgia|úrgico|úrgica)/.test(lower)) {
     return { value: "one_way", confidence: 0.9, raw: procedure };
   }
   if (/avalia|consulta|exame|tc\b|tomograf|rm\b|ressonan|hemodi[áa]lise/.test(lower)) {

@@ -3,7 +3,7 @@ import { normalize, matchKey } from "./normalize";
 export interface Segmented {
   /** Texto após `normalize()`. */
   normalized: string;
-  /** Linhas não-vazias, trimmed. */
+  /** Linhas não-vazias, trimmed, com bullets/marcadores iniciais removidos. */
   lines: string[];
   /**
    * Mapa de `matchKey(label)` → valor original (trimmed). Construído a
@@ -12,13 +12,14 @@ export interface Segmented {
   labels: Map<string, string>;
 }
 
-const LABEL_RE = /^([A-Za-zÀ-ſ][A-Za-zÀ-ſ0-9 .]+?)\s*[:\-]\s*(.+)$/;
+const BULLET_RE = /^[-*•·>]\s+/;
+const LABEL_RE = /^([A-Za-zÀ-ſ][A-Za-zÀ-ſ0-9 .]+?)\s*[:-]\s*(.+)$/;
 
 export function segment(raw: string): Segmented {
   const normalized = normalize(raw);
   const lines = normalized
     .split("\n")
-    .map((l) => l.trim())
+    .map((l) => l.trim().replace(BULLET_RE, "").trim())
     .filter((l) => l.length > 0);
 
   const labels = new Map<string, string>();
@@ -26,7 +27,6 @@ export function segment(raw: string): Segmented {
     const m = LABEL_RE.exec(line);
     if (!m) continue;
     const key = matchKey(m[1]!);
-    // Não sobrescreve label encontrada antes (linha mais cedo prevalece).
     if (!labels.has(key)) labels.set(key, m[2]!.trim());
   }
   return { normalized, lines, labels };
