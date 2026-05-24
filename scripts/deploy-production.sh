@@ -25,6 +25,17 @@ cd "$APP_DIR" || fatal "checkout dir $APP_DIR not found"
 [[ -f .env.production ]] || fatal ".env.production is missing"
 command -v pnpm >/dev/null || fatal "pnpm not installed"
 command -v pm2  >/dev/null || fatal "pm2 not installed"
+[[ -d .git ]] || fatal "$APP_DIR não é um repo git — clone primeiro (vide deploy/README.md)"
+
+# ─── Pull do código mais recente ──────────────────────────────────────────
+# actions/checkout@v4 do workflow vai para $GITHUB_WORKSPACE
+# (~/actions-runner-transportes/_work/...), NÃO para $APP_DIR. Esse script
+# roda em $APP_DIR, então é aqui que o pull tem que acontecer.
+info "pulling main"
+git fetch --quiet origin main
+git checkout --quiet main
+git reset --hard --quiet origin/main
+info "checked out $(git rev-parse --short HEAD): $(git log -1 --pretty=%s)"
 
 # ─── Install ──────────────────────────────────────────────────────────────
 info "installing dependencies (frozen lockfile)"
