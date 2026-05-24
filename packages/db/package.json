@@ -20,6 +20,7 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed.ts",
+    "seed:mock": "tsx src/seed-mock-transports.ts",
     "studio": "drizzle-kit studio",
     "check": "drizzle-kit check"
   },
