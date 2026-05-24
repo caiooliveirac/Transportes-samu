@@ -3,34 +3,70 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-05-24 · Fase 1 (Banco e parser) — PR 2 (parser) pronto pra push; PR 1 já merged
+**Última atualização:** 2026-05-24 · Fase 2 (Dashboard read-only) — PR 1 (backend) pronto pra push; Fase 1 fechada (#2)
 
 ---
 
 ## Resume here
 
-Branch `feat/phase-1-parser` com parser completo (normalize + segment +
-11 extractors + resolve + score + 10 fixtures + 52 testes ≥80% coverage
-+ CLI `pnpm parser:test`). Tudo verde local. Próxima ação:
+Branch `feat/phase-2-mock-seed-and-api` com seed mock + query agregada +
+GET `/api/transports` verde local. Próxima ação:
 
 ```bash
 cd /Users/caiooliveirac/Projetos/TransportesSAMU
-git push -u origin feat/phase-1-parser
-gh pr create --base main --head feat/phase-1-parser \
-  --title "feat(parser): phase 1 PR 2 — deterministic pipeline, 10 fixtures, 52 tests, CLI" \
-  --body "..." # ver script abaixo
+git push -u origin feat/phase-2-mock-seed-and-api
+gh pr create --base main --head feat/phase-2-mock-seed-and-api ...
+gh pr merge ... --merge --delete-branch
 ```
 
-Após merge do PR2: issue #2 fecha automaticamente via `Closes #2` no
-último commit. Pular para Fase 2 (painel multi-coluna).
+Depois do merge:
+
+```bash
+git checkout main && git pull
+git checkout -b feat/phase-2-dashboard-ui
+# PR2: header global, multi-coluna por unidade, card 48-56px,
+# filtros pills, busca, Sheet de detalhes (read-only)
+```
+
+Issue #5 ("Fase 2 — Dashboard read-only") é umbrella; PR 3 (real-time
+SSE) fecha via `Closes #5`.
 
 Se ambiente fresh:
 ```bash
 pnpm install
-pnpm setup:db && pnpm db:migrate && pnpm db:seed
+pnpm setup:db && pnpm db:migrate && pnpm db:seed && pnpm db:seed:mock
 cp .env.example .env.local
 pnpm lint && pnpm typecheck && pnpm build && pnpm test
+pnpm dev   # http://localhost:3000/api/transports retorna {units, transports, serverTime}
 ```
+
+## Fase 2 — PR 1 (backend) — critérios de pronto
+
+- [x] `seed-mock-transports.ts` idempotente, 22 transportes, 11 status, 2 whatsapp_messages
+- [x] `pnpm db:seed:mock` no root (separado do `db:seed` de produção)
+- [x] `listTransportsForDashboard()` retorna `{ units, transports, serverTime }` em uma chamada, com filtro de terminais antigos
+- [x] `findTransportWithContext(id)` retorna `{ transport, whatsappMessage, events }` para o Sheet de detalhes da PR2
+- [x] `apps/web/src/app/api/transports/route.ts` — `force-dynamic`, no-store, error handler
+- [x] `next.config.ts` carrega `.env.local` da raiz do monorepo via dotenv (apps/web não roda na raiz)
+- [x] `client.ts` agora é lazy (Proxy) — postgres pool só é criado na primeira query, desacoplando do build do Next
+- [x] Smoke test live: 17 unidades, 22 transportes, 11/11 status, serverTime presente
+- [ ] PR aberto e merged
+
+## Fase 2 — PR 2 (UI) — critérios de pronto
+
+- [ ] Header global (logo, contagem viva, pills, busca, worker badge stub)
+- [ ] Grid multi-coluna por unidade com header sticky
+- [ ] Card compacto 48-56px com borda lateral de status
+- [ ] Estados: novo, em deslocamento, atrasado pulsando, concluído fade, cancelado riscado, pendente revisao
+- [ ] Sheet de detalhes (ROTA / CLÍNICA / HIPÓTESES / TIMELINE / Mensagem original)
+- [ ] Atalhos: `/` busca, `Esc` fecha
+- [ ] Mobile: empilhado
+
+## Fase 2 — PR 3 (real-time) — critérios de pronto
+
+- [ ] SSE `/api/stream` com `transport.created`, `transport.updated`
+- [ ] Cliente patch otimista + fallback polling 10s
+- [ ] Issue #5 fechada via `Closes #5`
 
 ## Fase 1 — PR 1 (DB) — critérios de pronto
 
@@ -103,13 +139,17 @@ pnpm lint && pnpm typecheck && pnpm build && pnpm test
 | 2 | `d03caeb` | feat(db): add idempotent unit seed script |
 | 3 | `0f6eec7` | feat(db): add typed query helpers for units and transports |
 
-### Fase 1 — PR 2 (`feat/phase-1-parser`)
+### Fase 1 — PR 2 (`feat/phase-1-parser`) — merged via `7df7226`
 
 | # | Hash | Subject |
 |---|---|---|
 | 1 | `2d49481` | feat(parser): implement deterministic pipeline — normalize, segment, 11 extractors, scoring |
 | 2 | `ab24b2a` | test(parser): add 10 fixtures with declarative expected.json |
 | 3 | `14702d0` | feat(parser): add vitest suite, CLI, and fix regex bugs surfaced by fixtures |
+
+### Fase 2 — PR 1 (`feat/phase-2-mock-seed-and-api`)
+
+Em progresso (sequência de commits abaixo).
 
 ## Decisões deliberadas desta fase
 
