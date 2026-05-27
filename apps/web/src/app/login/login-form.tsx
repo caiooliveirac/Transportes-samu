@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-type Mode = "unit" | "admin";
+type Mode = "unit" | "user";
 
 export function LoginForm() {
   const router = useRouter();
@@ -11,9 +11,10 @@ export function LoginForm() {
   const next = params.get("next") || "/solicitar";
 
   const [mode, setMode] = useState<Mode>(
-    next.startsWith("/admin") || next === "/" ? "admin" : "unit",
+    next.startsWith("/admin") || next === "/" ? "user" : "unit",
   );
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,7 +27,7 @@ export function LoginForm() {
       const body =
         mode === "unit"
           ? { kind: "unit" as const, username: username.trim(), password }
-          : { kind: "admin" as const, password };
+          : { kind: "user" as const, email: email.trim().toLowerCase(), password };
       const r = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -37,9 +38,7 @@ export function LoginForm() {
         setError(
           j.error === "invalid_credentials"
             ? "Usuário ou senha inválidos."
-            : j.error === "admin_not_configured"
-              ? "Admin não configurado no servidor."
-              : "Não foi possível entrar.",
+            : "Não foi possível entrar.",
         );
         setLoading(false);
         return;
@@ -48,7 +47,7 @@ export function LoginForm() {
       const target =
         next && next !== "/"
           ? next
-          : data.kind === "admin"
+          : data.kind === "user"
             ? "/"
             : "/solicitar";
       router.push(target);
@@ -75,9 +74,9 @@ export function LoginForm() {
         </button>
         <button
           type="button"
-          onClick={() => setMode("admin")}
+          onClick={() => setMode("user")}
           className={
-            mode === "admin"
+            mode === "user"
               ? "rounded-md bg-white/[0.08] px-3 py-1.5 text-[12.5px] font-medium text-zinc-50 ring-1 ring-white/10"
               : "rounded-md px-3 py-1.5 text-[12.5px] font-medium text-zinc-400 hover:text-zinc-200"
           }
@@ -97,6 +96,22 @@ export function LoginForm() {
             required
             autoComplete="username"
             placeholder="upa_brotas"
+            className="surface-elevated rounded-lg px-3 py-2 text-[14px] text-zinc-50 outline-none focus:ring-2 focus:ring-[color:var(--color-accent-info)]"
+          />
+        </label>
+      )}
+
+      {mode === "user" && (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[11.5px] font-medium tracking-wide text-zinc-400 uppercase">
+            Login
+          </span>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="username"
+            placeholder="ex.: luiz, ana.paula, ivan.paiva"
             className="surface-elevated rounded-lg px-3 py-2 text-[14px] text-zinc-50 outline-none focus:ring-2 focus:ring-[color:var(--color-accent-info)]"
           />
         </label>

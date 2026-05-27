@@ -24,6 +24,7 @@
     "db:seed": "pnpm --filter @samu-cru/db seed",
     "db:seed:mock": "pnpm --filter @samu-cru/db seed:mock",
     "db:seed:credentials": "pnpm --filter @samu-cru/db seed:credentials",
+    "db:seed:users": "pnpm --filter @samu-cru/db seed:users",
     "db:studio": "pnpm --filter @samu-cru/db studio",
     "test": "pnpm -r --if-present test",
     "parser:test": "pnpm --filter @samu-cru/parser cli",

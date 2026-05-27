@@ -4,9 +4,12 @@ import { SignJWT, jwtVerify } from "jose";
  * Sessão assinada (JWT HS256) que carrega só o necessário pra autorizar.
  * Edge-compatible (jose roda em Web Crypto). Validade 12h.
  *
- * - `kind: 'unit'`  → solicitante de UPA, pode usar /solicitar e /api/solicitar
- * - `kind: 'admin'` → senha mestra, pode ver dashboard + /admin/*
+ * - `kind: 'unit'` → solicitante de UPA, pode usar /solicitar e /api/solicitar
+ * - `kind: 'user'` → pessoa nominal (regulador ou admin). `regulador` vê
+ *   dashboard; `admin` adiciona controle em /admin/*.
  */
+export type UserRole = "regulador" | "admin";
+
 export type SessionPayload =
   | {
       kind: "unit";
@@ -15,7 +18,11 @@ export type SessionPayload =
       unitName: string;
     }
   | {
-      kind: "admin";
+      kind: "user";
+      userId: number;
+      name: string;
+      email: string;
+      role: UserRole;
     };
 
 const ALG = "HS256";
@@ -62,7 +69,22 @@ export async function verifySession(
         };
       }
     }
-    if (payload.kind === "admin") return { kind: "admin" };
+    if (payload.kind === "user") {
+      if (
+        typeof payload.userId === "number" &&
+        typeof payload.name === "string" &&
+        typeof payload.email === "string" &&
+        (payload.role === "regulador" || payload.role === "admin")
+      ) {
+        return {
+          kind: "user",
+          userId: payload.userId,
+          name: payload.name,
+          email: payload.email,
+          role: payload.role,
+        };
+      }
+    }
     return null;
   } catch {
     return null;

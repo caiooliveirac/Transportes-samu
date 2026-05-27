@@ -28,11 +28,23 @@ export async function requireUnitSession(): Promise<
 }
 
 export async function requireAdminSession(): Promise<
-  Extract<SessionPayload, { kind: "admin" }>
+  Extract<SessionPayload, { kind: "user" }> & { role: "admin" }
 > {
   const session = await getSession();
-  if (!session || session.kind !== "admin") {
+  if (!session || session.kind !== "user" || session.role !== "admin") {
     redirect("/login?next=/admin");
+  }
+  return session as Extract<SessionPayload, { kind: "user" }> & {
+    role: "admin";
+  };
+}
+
+export async function requireRegulatorOrAdminSession(): Promise<
+  Extract<SessionPayload, { kind: "user" }>
+> {
+  const session = await getSession();
+  if (!session || session.kind !== "user") {
+    redirect("/login?next=/");
   }
   return session;
 }
