@@ -19,6 +19,21 @@
   --color-ink-300: #252c3c;
   --color-ink-400: #323a4d;
 
+  /* Paleta moderna — espelho dos tokens do plantoes/app/globals.css.
+   * Usada nas telas novas: /login, /solicitar, /solicitar/minhas, /admin.
+   * O dashboard regulador (/) segue na escala ink-* + STATUS. */
+  --color-warm-bg: #0a0d12;
+  --color-warm-bg-deep: #040608;
+  --color-ice: #9fbfd6;
+  --color-gold: #c5a16a;
+  --color-warm-green: #8fb39d;
+  --color-warm-amber: #d8a65d;
+  --color-warm-red: #d36464;
+  --color-accent-confirm: #4ec9b8;
+  --color-accent-warn: #e0a458;
+  --color-accent-fraud: #ef6961;
+  --color-accent-info: #7c8cf8;
+
   /* Typography — Inter for UI, JetBrains Mono for clinical data. */
   --font-sans:
     var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
@@ -96,4 +111,48 @@
   *::-webkit-scrollbar-thumb:hover {
     background: #ffffff22;
   }
+}
+
+/* ── Fundo "warm" pra páginas novas. Aplica via className="page-warm".
+ *   Gradientes radiais sobre base escura quente — mesmo efeito do
+ *   plantoes. Grão SVG sutil em overlay defete banding em OLED. */
+.page-warm {
+  background:
+    radial-gradient(circle at 14% 10%, rgba(197, 161, 106, 0.14), transparent 24%),
+    radial-gradient(circle at 86% 16%, rgba(159, 191, 214, 0.11), transparent 22%),
+    radial-gradient(circle at 24% 96%, rgba(124, 140, 248, 0.08), transparent 30%),
+    radial-gradient(circle at 78% 82%, rgba(78, 201, 184, 0.06), transparent 28%),
+    linear-gradient(180deg, var(--color-warm-bg) 0%, var(--color-warm-bg-deep) 100%);
+  color: #f3f5f7;
+  min-height: 100vh;
+  position: relative;
+}
+.page-warm::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/></svg>");
+  background-size: 160px 160px;
+  mix-blend-mode: overlay;
+}
+.page-warm > * {
+  position: relative;
+  z-index: 1;
+}
+
+.surface-glass {
+  background: rgba(18, 23, 32, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: saturate(140%) blur(20px);
+  -webkit-backdrop-filter: saturate(140%) blur(20px);
+  box-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.85);
+}
+
+.surface-elevated {
+  background: rgba(22, 28, 38, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 24px -16px rgba(0, 0, 0, 0.75);
 }

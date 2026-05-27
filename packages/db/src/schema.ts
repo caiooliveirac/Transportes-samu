@@ -129,6 +129,12 @@ export const transportRequests = pgTable(
     originUnitRaw: varchar("origin_unit_raw", { length: 200 }).notNull(),
     destinationName: varchar("destination_name", { length: 200 }).notNull(),
 
+    // Origem da solicitação
+    /** 'whatsapp' (legado), 'web_form' (solicitante UPA), 'manual' (regulador) */
+    source: varchar("source", { length: 16 }).notNull().default("whatsapp"),
+    /** Unidade que criou via web form. Null em transportes legados WhatsApp. */
+    createdByUnitId: integer("created_by_unit_id").references(() => units.id),
+
     // Procedimento e timing
     procedure: text("procedure").notNull(),
     procedureDate: date("procedure_date"),
@@ -213,6 +219,26 @@ export const workerHeartbeat = pgTable("worker_heartbeat", {
     .defaultNow(),
 });
 
+/* ─── unit_credentials ───────────────────────────────────────────────────
+ * Credenciais por unidade pra o form de solicitação web. 1:1 com units
+ * — cada UPA/PA tem um login único. Senha em hash scrypt (Node runtime).
+ * Admin pode rotacionar via /admin/unidades.
+ * ──────────────────────────────────────────────────────────────────────── */
+export const unitCredentials = pgTable("unit_credentials", {
+  unitId: integer("unit_id")
+    .primaryKey()
+    .references(() => units.id, { onDelete: "cascade" }),
+  username: varchar("username", { length: 64 }).notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 /* ─── Inferred types ─────────────────────────────────────────────────── */
 export type Unit = typeof units.$inferSelect;
 export type NewUnit = typeof units.$inferInsert;
@@ -226,3 +252,5 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type WorkerHeartbeat = typeof workerHeartbeat.$inferSelect;
 export type NewWorkerHeartbeat = typeof workerHeartbeat.$inferInsert;
+export type UnitCredential = typeof unitCredentials.$inferSelect;
+export type NewUnitCredential = typeof unitCredentials.$inferInsert;

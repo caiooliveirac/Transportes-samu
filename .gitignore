@@ -42,7 +42,6 @@ yarn-debug.log*
 pnpm-debug.log*
 
 # Baileys WhatsApp session — NEVER commit
-auth/
 apps/ingest/auth/
 
 # Drizzle generated
