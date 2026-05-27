@@ -15,7 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ unitId: string }> },
 ) {
   const session = await getSession();
-  if (!session || session.kind !== "admin") {
+  if (!session || session.kind !== "user" || session.role !== "admin") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

@@ -25,6 +25,7 @@ interface HeaderProps {
   onQueryChange: (q: string) => void;
   /** Estado da conexão SSE/polling (substitui o stub gray do PR2). */
   liveStatus: LiveStatus;
+  currentUser: { name: string; role: "regulador" | "admin" };
 }
 
 interface FilterPill {
@@ -41,6 +42,7 @@ export function DashboardHeader({
   query,
   onQueryChange,
   liveStatus,
+  currentUser,
 }: HeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -153,14 +155,23 @@ export function DashboardHeader({
 
         <LiveBadge status={liveStatus} />
 
-        <Link
-          href="/admin"
-          title="Gerenciar credenciais das unidades"
-          className="bg-ink-200 inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium text-zinc-300 ring-1 ring-inset ring-white/10 hover:text-zinc-50"
+        {currentUser.role === "admin" && (
+          <Link
+            href="/admin"
+            title="Gerenciar credenciais e usuários"
+            className="bg-ink-200 inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium text-zinc-300 ring-1 ring-inset ring-white/10 hover:text-zinc-50"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Admin
+          </Link>
+        )}
+
+        <span
+          title={`${currentUser.name} · ${currentUser.role}`}
+          className="hidden font-mono text-[10.5px] text-zinc-400 sm:inline"
         >
-          <ShieldCheck className="h-3.5 w-3.5" />
-          Admin
-        </Link>
+          {currentUser.name.split(" ")[0]}
+        </span>
 
         <LogoutButton />
       </div>

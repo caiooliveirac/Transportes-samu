@@ -13,6 +13,7 @@ import { useLiveDashboard } from "@/hooks/use-live-dashboard";
 
 interface DashboardShellProps {
   initial: DashboardData;
+  currentUser: { name: string; role: "regulador" | "admin" };
 }
 
 function matchesQuery(t: SerializedTransport, q: string): boolean {
@@ -35,7 +36,7 @@ function isToday(iso: string | null, refIso: string): boolean {
   );
 }
 
-export function DashboardShell({ initial }: DashboardShellProps) {
+export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
   const { data, status: liveStatus } = useLiveDashboard(initial);
 
   const [filter, setFilter] = useState<FilterId>("all");
@@ -103,6 +104,7 @@ export function DashboardShell({ initial }: DashboardShellProps) {
           query={query}
           onQueryChange={setQuery}
           liveStatus={liveStatus}
+          currentUser={currentUser}
         />
 
         <div className="flex-1 overflow-x-auto overflow-y-hidden">

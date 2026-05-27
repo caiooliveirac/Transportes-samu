@@ -47,9 +47,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Tudo o resto (/, /admin/*, /api/admin/*, /api/transports/*, /api/stream)
-  // exige sessão admin.
-  if (!session || session.kind !== "admin") {
+  // /admin/* e /api/admin/* exigem role admin
+  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
+    if (!session || session.kind !== "user" || session.role !== "admin") {
+      return isApi ? denyApi() : denyUi(pathname);
+    }
+    return NextResponse.next();
+  }
+
+  // Dashboard regulador (/, /api/transports/*, /api/stream) — regulador ou admin
+  if (!session || session.kind !== "user") {
     return isApi ? denyApi() : denyUi(pathname);
   }
   return NextResponse.next();

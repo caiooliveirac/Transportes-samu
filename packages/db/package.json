@@ -22,6 +22,7 @@
     "seed": "tsx src/seed.ts",
     "seed:mock": "tsx src/seed-mock-transports.ts",
     "seed:credentials": "tsx src/seed-credentials.ts",
+    "seed:users": "tsx src/seed-users.ts",
     "studio": "drizzle-kit studio",
     "check": "drizzle-kit check"
   },

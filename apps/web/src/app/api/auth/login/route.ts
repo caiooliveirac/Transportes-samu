@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { cookies } from "next/headers";
-import { timingSafeEqual } from "node:crypto";
 import {
   findCredentialByUsername,
+  findUserByEmail,
   touchLastLogin,
   verifyPassword,
 } from "@samu-cru/db";
@@ -23,17 +23,11 @@ const Body = z.discriminatedUnion("kind", [
     password: z.string().min(1).max(200),
   }),
   z.object({
-    kind: z.literal("admin"),
+    kind: z.literal("user"),
+    email: z.string().min(1).max(200),
     password: z.string().min(1).max(200),
   }),
 ]);
-
-function safeEqualString(a: string, b: string): boolean {
-  const ab = Buffer.from(a, "utf8");
-  const bb = Buffer.from(b, "utf8");
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
 
 export async function POST(req: Request) {
   let payload: z.infer<typeof Body>;
@@ -43,18 +37,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  if (payload.kind === "admin") {
-    const expected = process.env.ADMIN_PASSWORD;
-    if (!expected) {
+  if (payload.kind === "user") {
+    const u = await findUserByEmail(payload.email);
+    if (!u || !u.isActive) {
       return NextResponse.json(
-        { error: "admin_not_configured" },
-        { status: 500 },
+        { error: "invalid_credentials" },
+        { status: 401 },
       );
     }
-    if (!safeEqualString(payload.password, expected)) {
-      return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
+    if (u.role !== "regulador" && u.role !== "admin") {
+      return NextResponse.json({ error: "invalid_role" }, { status: 403 });
     }
-    const token = await signSession({ kind: "admin" });
+    const ok = await verifyPassword(payload.password, u.passwordHash);
+    if (!ok) {
+      return NextResponse.json(
+        { error: "invalid_credentials" },
+        { status: 401 },
+      );
+    }
+    const token = await signSession({
+      kind: "user",
+      userId: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role as "regulador" | "admin",
+    });
     const jar = await cookies();
     jar.set(SESSION_COOKIE, token, {
       httpOnly: true,
@@ -63,7 +70,12 @@ export async function POST(req: Request) {
       path: "/",
       maxAge: SESSION_TTL_SECONDS,
     });
-    return NextResponse.json({ ok: true, kind: "admin" });
+    return NextResponse.json({
+      ok: true,
+      kind: "user",
+      name: u.name,
+      role: u.role,
+    });
   }
 
   const record = await findCredentialByUsername(payload.username);

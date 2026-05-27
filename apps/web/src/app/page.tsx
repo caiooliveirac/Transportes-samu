@@ -1,6 +1,7 @@
 import { listTransportsForDashboard } from "@samu-cru/db";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { requireRegulatorOrAdminSession } from "@/lib/auth/server";
 import type {
   DashboardData,
   SerializedTransport,
@@ -18,6 +19,7 @@ export const revalidate = 0;
  * (Phase 3 SSE fallback) — o handler retorna o mesmo shape.
  */
 export default async function HomePage() {
+  const session = await requireRegulatorOrAdminSession();
   const snapshot = await listTransportsForDashboard();
 
   const data: DashboardData = {
@@ -41,5 +43,10 @@ export default async function HomePage() {
     serverTime: snapshot.serverTime,
   };
 
-  return <DashboardShell initial={data} />;
+  return (
+    <DashboardShell
+      initial={data}
+      currentUser={{ name: session.name, role: session.role }}
+    />
+  );
 }
