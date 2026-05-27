@@ -159,3 +159,86 @@ export async function listTransportsForDashboard(): Promise<DashboardSnapshot> {
     serverTime: new Date().toISOString(),
   };
 }
+
+/**
+ * Lista solicitações criadas por uma unidade via web form. Inclui
+ * concluídas e canceladas — a tela /solicitar/minhas mostra histórico
+ * completo. Ordenado por createdAt desc.
+ */
+export async function listTransportsByCreatedByUnit(
+  unitId: number,
+  limit = 100,
+): Promise<TransportRequest[]> {
+  return db
+    .select()
+    .from(transportRequests)
+    .where(eq(transportRequests.createdByUnitId, unitId))
+    .orderBy(desc(transportRequests.createdAt))
+    .limit(limit);
+}
+
+/**
+ * Cancela um transporte pelo próprio solicitante. Só funciona se status
+ * ainda não-terminal e createdByUnitId bate. Insere event de auditoria.
+ * Retorna o registro atualizado ou undefined se não autorizado/inexistente.
+ */
+export async function cancelTransportByCreator(
+  transportId: string,
+  unitId: number,
+  reason?: string,
+): Promise<TransportRequest | undefined> {
+  const [current] = await db
+    .select()
+    .from(transportRequests)
+    .where(eq(transportRequests.id, transportId))
+    .limit(1);
+  if (!current) return undefined;
+  if (current.createdByUnitId !== unitId) return undefined;
+  if (current.status === "concluido" || current.status === "cancelado") {
+    return current;
+  }
+
+  const [updated] = await db
+    .update(transportRequests)
+    .set({ status: "cancelado", updatedAt: new Date() })
+    .where(eq(transportRequests.id, transportId))
+    .returning();
+
+  await db.insert(transportEvents).values({
+    transportId,
+    kind: "status_change",
+    fromValue: { status: current.status },
+    toValue: { status: "cancelado", cancelledBy: "solicitante" },
+    note: reason ?? null,
+  });
+
+  return updated;
+}
+
+/**
+ * Insere transporte vindo do form web. Diferente do parser path: sem
+ * whatsappMessageId, source='web_form', parseConfidence=1.0, status='novo'.
+ * Cria evento 'created' pra timeline.
+ */
+export async function insertTransportFromWebForm(
+  values: NewTransportRequest,
+): Promise<TransportRequest> {
+  const [row] = await db
+    .insert(transportRequests)
+    .values({
+      ...values,
+      source: "web_form",
+      parseConfidence: 1.0,
+      status: values.status ?? "novo",
+    })
+    .returning();
+  if (!row) throw new Error("insertTransportFromWebForm returned no row");
+
+  await db.insert(transportEvents).values({
+    transportId: row.id,
+    kind: "created",
+    toValue: { source: "web_form", createdByUnitId: values.createdByUnitId },
+  });
+
+  return row;
+}

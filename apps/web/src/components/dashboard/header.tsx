@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Heart, Plus, Search } from "lucide-react";
+import Link from "next/link";
+import { Heart, Plus, Search, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LiveBadge } from "./live-badge";
+import { LogoutButton } from "@/components/logout-button";
 import type { LiveStatus } from "@/hooks/use-live-dashboard";
 
 export type FilterId = "all" | "today" | "overdue" | "pending";
@@ -150,6 +152,17 @@ export function DashboardHeader({
         </button>
 
         <LiveBadge status={liveStatus} />
+
+        <Link
+          href="/admin"
+          title="Gerenciar credenciais das unidades"
+          className="bg-ink-200 inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium text-zinc-300 ring-1 ring-inset ring-white/10 hover:text-zinc-50"
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Admin
+        </Link>
+
+        <LogoutButton />
       </div>
     </header>
   );

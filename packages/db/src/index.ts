@@ -1,6 +1,7 @@
 export { db, type Database } from "./client";
 export * as schema from "./schema";
 export * from "./queries";
+export { hashPassword, verifyPassword, generateReadablePassword } from "./password";
 export type {
   Unit,
   NewUnit,
@@ -14,4 +15,6 @@ export type {
   NewUser,
   WorkerHeartbeat,
   NewWorkerHeartbeat,
+  UnitCredential,
+  NewUnitCredential,
 } from "./schema";
