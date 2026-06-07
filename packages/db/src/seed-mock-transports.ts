@@ -139,7 +139,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "em_deslocamento_origem",
     vitals: { pa: "90/60", fc: 118, fr: 24, spo2: 92, glasgow: 15, dextro: 187 },
     diagnoses: ["IAM com supra de ST"],
-    ambulanceLabel: "USA 02",
+    ambulanceLabel: "SM01",
     ambulanceKind: "USA",
     whatsappRawText: RODRIGO_ARGOLO_RAW,
     whatsappOffsetMin: -38,
@@ -167,7 +167,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "viatura_designada",
     vitals: { pa: "172/112", fc: 98, fr: 20, spo2: 97, glasgow: 15 },
     diagnoses: ["DHEG", "Pré-eclâmpsia grave"],
-    ambulanceLabel: "USA 01",
+    ambulanceLabel: "CB02",
     ambulanceKind: "USA",
   },
   {
@@ -207,7 +207,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "viatura_designada",
     vitals: { pa: "178/96", fc: 88, fr: 18, spo2: 95, glasgow: 13, dextro: 142 },
     diagnoses: ["AVC isquêmico agudo"],
-    ambulanceLabel: "USA 03",
+    ambulanceLabel: "PR03",
     ambulanceKind: "USA",
   },
   {
@@ -245,7 +245,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "em_deslocamento_destino",
     vitals: { pa: "140/84", fc: 110, fr: 28, spo2: 88, glasgow: 15, temp: 37.6 },
     diagnoses: ["DPOC agudizada", "Insuficiência respiratória"],
-    ambulanceLabel: "USA 04",
+    ambulanceLabel: "PM04",
     ambulanceKind: "USA",
   },
 
@@ -304,7 +304,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "viatura_designada",
     vitals: { pa: "96/58", fc: 126, fr: 26, spo2: 90, glasgow: 14, temp: 39.2 },
     diagnoses: ["Sepse de foco pulmonar"],
-    ambulanceLabel: "USA 01",
+    ambulanceLabel: "BR05",
     ambulanceKind: "USA",
   },
 
@@ -324,7 +324,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "em_deslocamento_destino",
     vitals: { pa: "150/95", fc: 112, fr: 22, spo2: 93, glasgow: 14, temp: 38.1 },
     diagnoses: ["Pneumonia comunitária", "ICC descompensada"],
-    ambulanceLabel: "USB 07",
+    ambulanceLabel: "CN11",
     ambulanceKind: "USB",
   },
   {
@@ -338,7 +338,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "chegou_destino",
     vitals: { pa: "138/82", fc: 78, fr: 16, spo2: 98, glasgow: 15 },
     diagnoses: ["Doença renal crônica dialítica"],
-    ambulanceLabel: "USB 07",
+    ambulanceLabel: "CN12",
     ambulanceKind: "USB",
   },
   {
@@ -397,7 +397,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "retornando_origem",
     vitals: { pa: "140/88", fc: 80, fr: 16, spo2: 98, glasgow: 15 },
     diagnoses: ["Crise hipertensiva"],
-    ambulanceLabel: "USB 02",
+    ambulanceLabel: "SM17",
     ambulanceKind: "USB",
   },
   {
@@ -425,7 +425,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "viatura_designada",
     vitals: { pa: "144/88", fc: 96, fr: 18, spo2: 97, glasgow: 15 },
     diagnoses: ["Isquemia arterial aguda"],
-    ambulanceLabel: "USB 06",
+    ambulanceLabel: "PP21",
     ambulanceKind: "USB",
   },
   {
@@ -439,7 +439,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "paciente_embarcado",
     vitals: { pa: "95/60", fc: 148, fr: 36, spo2: 88, glasgow: 15, temp: 38.2 },
     diagnoses: ["Crise asmática grave", "Insuficiência respiratória"],
-    ambulanceLabel: "USA 04",
+    ambulanceLabel: "CN10",
     ambulanceKind: "USA",
   },
   {
@@ -467,7 +467,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "em_deslocamento_origem",
     vitals: { pa: "85/50", fc: 132, fr: 26, spo2: 90, glasgow: 9, temp: 37.9 },
     diagnoses: ["Politrauma", "TCE grave"],
-    ambulanceLabel: "USA 01",
+    ambulanceLabel: "PP20",
     ambulanceKind: "USA",
   },
   {
@@ -493,7 +493,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "paciente_embarcado",
     vitals: { pa: "98/62", fc: 116, fr: 20, spo2: 96, glasgow: 15 },
     diagnoses: ["Hemorragia digestiva alta"],
-    ambulanceLabel: "USB 03",
+    ambulanceLabel: "CB25",
     ambulanceKind: "USB",
   },
 
@@ -535,7 +535,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "paciente_embarcado",
     vitals: { pa: "90/55", fc: 130, fr: 28, spo2: 91, glasgow: 8 },
     diagnoses: ["TCE grave", "Choque hemorrágico"],
-    ambulanceLabel: "USA 02",
+    ambulanceLabel: "IT30",
     ambulanceKind: "USA",
   },
   {
@@ -563,7 +563,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "viatura_designada",
     vitals: { pa: "130/85", fc: 84, fr: 16, spo2: 98, glasgow: 15 },
     diagnoses: ["Angina estável — investigar"],
-    ambulanceLabel: "USB 03",
+    ambulanceLabel: "IT31",
     ambulanceKind: "USB",
   },
   {
@@ -591,7 +591,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "em_deslocamento_destino",
     vitals: { pa: "100/65", fc: 110, fr: 24, spo2: 92, glasgow: 15 },
     diagnoses: ["ICC descompensada"],
-    ambulanceLabel: "USB 05",
+    ambulanceLabel: "PR33",
     ambulanceKind: "USB",
   },
   {
@@ -631,7 +631,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "viatura_designada",
     vitals: { pa: "164/92", fc: 82, fr: 18, spo2: 96, glasgow: 14, dextro: 138 },
     diagnoses: ["AVC isquêmico"],
-    ambulanceLabel: "USB 04",
+    ambulanceLabel: "JA37",
     ambulanceKind: "USB",
   },
 
@@ -659,7 +659,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "em_deslocamento_destino",
     vitals: { pa: "150/96", fc: 118, fr: 26, spo2: 91, glasgow: 15 },
     diagnoses: ["ICC descompensada", "Edema agudo de pulmão"],
-    ambulanceLabel: "USA 03",
+    ambulanceLabel: "PM40",
     ambulanceKind: "USA",
   },
 
@@ -675,7 +675,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "concluido",
     vitals: { pa: "120/78", fc: 96, fr: 18, spo2: 97, glasgow: 14, temp: 38.6 },
     diagnoses: ["Meningite bacteriana"],
-    ambulanceLabel: "USA 03",
+    ambulanceLabel: "CZ50",
     ambulanceKind: "USA",
   },
   {
@@ -715,7 +715,7 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     status: "chegou_destino",
     vitals: { pa: "132/80", fc: 100, fr: 22, spo2: 93, glasgow: 15, temp: 38.3 },
     diagnoses: ["Pneumonia comunitária"],
-    ambulanceLabel: "USB 08",
+    ambulanceLabel: "PM41",
     ambulanceKind: "USB",
   },
 
