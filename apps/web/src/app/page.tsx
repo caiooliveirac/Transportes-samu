@@ -46,7 +46,11 @@ export default async function HomePage() {
   return (
     <DashboardShell
       initial={data}
-      currentUser={{ name: session.name, role: session.role }}
+      currentUser={{
+        id: session.userId,
+        name: session.name,
+        role: session.role,
+      }}
     />
   );
 }

@@ -14,7 +14,15 @@ import {
   RefreshCcw,
   Sparkles,
 } from "lucide-react";
-import { STATUS, UNITS, type TripType } from "@samu-cru/shared";
+import {
+  STATUS,
+  UNITS,
+  SEVERITY,
+  SEVERITY_META,
+  deriveSeverity,
+  type Severity,
+  type TripType,
+} from "@samu-cru/shared";
 
 import {
   Sheet,
@@ -26,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "./status-pill";
 import { VitalGrid } from "./vital-grid";
+import { ProgressControl } from "./progress-control";
 import {
   formatAge,
   formatCns,
@@ -33,7 +42,10 @@ import {
   formatRelative,
   maskCns,
 } from "@/lib/format";
-import type { TransportDetailData } from "@/lib/dashboard-types";
+import type {
+  SerializedTransport,
+  TransportDetailData,
+} from "@/lib/dashboard-types";
 import { cn } from "@/lib/utils";
 
 interface DetailSheetProps {
@@ -102,6 +114,11 @@ export function DetailSheet({ transportId, onClose }: DetailSheetProps) {
             onToggleReveal={() => setRevealed((v) => !v)}
             showRaw={showRaw}
             onToggleRaw={() => setShowRaw((v) => !v)}
+            onPatch={(p) =>
+              setData((d) =>
+                d ? { ...d, transport: { ...d.transport, ...p } } : d,
+              )
+            }
           />
         )}
       </SheetContent>
@@ -115,6 +132,7 @@ interface DetailBodyProps {
   onToggleReveal: () => void;
   showRaw: boolean;
   onToggleRaw: () => void;
+  onPatch: (patch: Partial<SerializedTransport>) => void;
 }
 
 function DetailBody({
@@ -123,6 +141,7 @@ function DetailBody({
   onToggleReveal,
   showRaw,
   onToggleRaw,
+  onPatch,
 }: DetailBodyProps) {
   const { transport, whatsappMessage, events } = data;
   const meta = STATUS[transport.status];
@@ -209,6 +228,8 @@ function DetailBody({
       </div>
 
       <div className="flex flex-col gap-5 px-5 py-4">
+        <ProgressControl transport={transport} onPatched={onPatch} />
+
         <Section label="Rota">
           <div className="flex flex-col gap-2 rounded-md bg-white/[0.02] p-3 ring-1 ring-inset ring-white/5">
             <div className="flex items-center gap-2 text-[12.5px] text-zinc-200">
@@ -231,6 +252,10 @@ function DetailBody({
 
         <Section label="Clínica">
           <VitalGrid vitals={transport.vitals} />
+        </Section>
+
+        <Section label="Gravidade">
+          <SeverityControl transport={transport} />
         </Section>
 
         <Section label="Hipóteses">
@@ -305,25 +330,93 @@ function DetailBody({
           </Section>
         )}
       </div>
+    </div>
+  );
+}
 
-      <footer className="mt-auto flex items-center justify-end gap-2 border-t border-white/[0.04] bg-white/[0.015] px-5 py-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled
-          title="Disponível na Fase 4"
-        >
-          Editar campos
-        </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled
-          title="Disponível na Fase 4"
-        >
-          Cancelar transporte
-        </Button>
-      </footer>
+/**
+ * Controle de gravidade clínica. Mostra a gravidade derivada (vitais +
+ * suspeita) como default e deixa o regulador sobrescrever. Clicar na opção
+ * igual à derivada — ou em "Automático" — limpa o override (envia null).
+ */
+function SeverityControl({ transport }: { transport: SerializedTransport }) {
+  const derived = deriveSeverity(transport.vitals, transport.diagnoses);
+  const [override, setOverride] = useState<Severity | null>(
+    (transport.severityOverride as Severity | null) ?? null,
+  );
+  const [saving, setSaving] = useState(false);
+
+  const effective = override ?? derived;
+
+  async function save(next: Severity | null) {
+    // selecionar a própria derivada equivale a "voltar ao automático".
+    const payload = next !== null && next === derived ? null : next;
+    const prev = override;
+    setOverride(payload);
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/transports/${transport.id}/severity`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ severity: payload }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    } catch (err) {
+      console.error("[detail-sheet] severity save failed:", err);
+      setOverride(prev);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {SEVERITY.map((key) => {
+          const meta = SEVERITY_META[key];
+          const active = effective === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={saving}
+              onClick={() => save(key)}
+              aria-pressed={active}
+              className={cn(
+                "inline-flex h-7 items-center rounded-md px-2.5 text-[12px] font-medium ring-1 ring-inset transition-colors disabled:opacity-50",
+                active
+                  ? meta.pillDarkClass
+                  : "bg-ink-200 text-zinc-400 ring-white/10 hover:text-zinc-100",
+              )}
+            >
+              {meta.label}
+            </button>
+          );
+        })}
+        {override !== null && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => save(null)}
+            className="ml-1 text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline disabled:opacity-50"
+          >
+            voltar ao automático
+          </button>
+        )}
+      </div>
+      <p className="text-[11px] text-zinc-500">
+        {override !== null ? (
+          <>
+            Ajustado pelo regulador
+            <span className="text-zinc-600">
+              {" "}
+              · automático: {SEVERITY_META[derived].label}
+            </span>
+          </>
+        ) : (
+          <>Derivado de sinais vitais + suspeita principal (automático)</>
+        )}
+      </p>
     </div>
   );
 }
