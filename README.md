@@ -6,11 +6,15 @@ mensagens semi-estruturadas do WhatsApp vindas de ~17 unidades (UPAs, PAs,
 hospital municipal), parseia automaticamente, e exibe num painel denso
 agrupado por unidade de origem.
 
-**Status atual:** Fase 0 concluída (monorepo + tokens visuais + esqueletos
-de pacotes). Próxima fase: schema Drizzle, seed das unidades, parser
-determinístico com fixtures reais. Consulte [`WORKLOG.md`](./WORKLOG.md)
-para estado de execução; [`PLANNING.md`](./PLANNING.md) é o contrato
-arquitetural.
+**Status atual:** em produção (`transportes.mnrs.com.br`). Pivot concluído
+do ingest WhatsApp para **formulário web** de solicitação por unidade +
+painel do regulador. Consulte [`WORKLOG.md`](./WORKLOG.md) para estado de
+execução; [`PLANNING.md`](./PLANNING.md) é o contrato arquitetural.
+
+> **Para entender o produto (e para o agente de design):** comece por
+> [`DESIGN-BRIEF.md`](./DESIGN-BRIEF.md) — explica o que a app faz, os dois
+> públicos, todas as telas atuais e os tokens visuais. O `DESIGN.md`
+> descreve o protótipo original e está parcialmente desatualizado.
 
 ## Stack
 
