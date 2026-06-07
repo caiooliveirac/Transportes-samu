@@ -19,30 +19,33 @@ import {
 loadMonorepoEnv();
 
 /**
- * Dev-only seed: panorama denso e diverso da regulação do SAMU/CRU Salvador
- * para exercitar o painel grid (prioridade da rede, gravidade derivada,
- * urgência, viaturas vinculadas, ciclo de vida completo).
+ * Seed de demonstração: panorama denso, diverso e COMPLETO da regulação do
+ * SAMU/CRU Salvador para valorizar o painel grid. Diferente do ingest
+ * Baileys (que trazia pacientes incompletos), aqui todo caso é preenchido
+ * corretamente: paciente + idade + CNS + CPF, rota com serviço clínico de
+ * destino, procedimento detalhado, vitais coerentes com a hipótese,
+ * hipóteses diagnósticas, prazo, tipo de viagem e viatura quando já há
+ * designação.
  *
  * Cobertura intencional:
  *  - As 3 unidades SEM ambulância própria (faixa "Prioridade da rede"):
  *    Rodrigo Argolo (PA Tancredo Neves), Orlando Imbassahy (UPA Bairro da
- *    Paz) e Hélio Machado — sempre com pacientes, várias urgências.
- *  - Mistura de gravidade: crítico (TCE/choque/Glasgow baixo/SatO2 baixa),
- *    grave (IAM/sepse/DHEG) e estável (consultas/hemodiálise).
- *  - Todos os 11 status, incl. pendente_revisão, cancelado e concluídos
- *    (com fade), e prazos atrasados/urgentes/folgados/sem prazo.
- *  - Viatura (USA p/ graves, USB p/ remoções) vinculada a partir de
- *    "viatura_designada" — o prefixo aparece no card e no detalhe.
+ *    Paz) e Hélio Machado — sempre movimentadas, com urgências.
+ *  - Gravidade: crítico (TCE/choque/AVC/IAM/sepse), grave (DPOC/HDA/peds)
+ *    e estável (consultas/exames/hemodiálise/quimio).
+ *  - Todos os 11 status, prazos atrasados/urgentes/folgados/sem prazo,
+ *    viatura USA (graves) e USB (remoções) a partir de "viatura_designada".
+ *  - UPA San Martin deixada vazia (vai pro rodapé "Sem pendências").
  *
  * NÃO é idempotente: faz RESET (TRUNCATE) de transport_requests +
- * transport_events + whatsapp_messages e remove units órfãs (códigos fora
- * de @samu-cru/shared) antes de inserir. Ferramenta de desenvolvimento —
- * rode `pnpm db:seed` antes para garantir as 17 unidades canônicas.
+ * transport_events + whatsapp_messages e remove units órfãs antes de
+ * inserir. Rode `pnpm db:seed` antes para garantir as 17 unidades.
  */
 
 interface MockTransport {
   patientName: string;
   patientAgeYears: number;
+  /** Sobrescreve o CNS gerado (ex.: casos com mensagem original). */
   patientCns?: string;
   patientCpf?: string;
   originUnitCode: string;
@@ -52,32 +55,53 @@ interface MockTransport {
   deadlineOffsetMin: number | null;
   tripType: TripType;
   status: TransportStatus;
-  vitals?: Vitals;
-  diagnoses?: string[];
+  vitals: Vitals;
+  diagnoses: string[];
   ambulanceLabel?: string;
   ambulanceKind?: AmbulanceKind;
-  /** Se preenchido, cria whatsapp_messages e linka (demo "mensagem original"). */
   whatsappRawText?: string;
   whatsappOffsetMin?: number;
   parseConfidence?: number;
   parseWarnings?: string[];
 }
 
+/** CNS plausível de 15 dígitos (determinístico, sem Math.random). */
+function genCns(seed: number): string {
+  let x = ((seed + 17) * 2654435761) >>> 0;
+  let s = "7";
+  while (s.length < 15) {
+    x = (x * 1103515245 + 12345) >>> 0;
+    s += (x % 10).toString();
+  }
+  return s.slice(0, 15);
+}
+
+/** CPF plausível de 11 dígitos (determinístico). */
+function genCpf(seed: number): string {
+  let x = ((seed + 97) * 40503) >>> 0;
+  let s = "";
+  while (s.length < 11) {
+    x = (x * 1103515245 + 12345) >>> 0;
+    s += (x % 10).toString();
+  }
+  return s.slice(0, 11);
+}
+
 const RODRIGO_ARGOLO_RAW = `*SOLICITAÇÃO DE TRANSPORTE — SAMU/CRU*
 PA TANCREDO NEVES (Rodrigo Argolo)
 
 Paciente: Manoel dos Santos Conceição, 58a
-CNS: 707004812350017
+CNS: 707004812350017 · CPF: 024.918.305-77
 
-Destino: H. Ana Nery (hemodinâmica)
+Destino: H. Ana Nery — Hemodinâmica
 Motivo: IAM com supra de ST — angioplastia primária
 
 *TEMPO PORTA-BALÃO — TRANSPORTE IMEDIATO*
 
-PA 90/60 · FC 118 · FR 24 · SatO2 92% · GCS 15 · Dextro 187
+PA 90/60 · FC 118 · FR 24 · SatO2 92% AA · GCS 15 · Dextro 187
 
 Não temos viatura própria, dependemos da rede.
-Enf. plantão`;
+Enf. Rosângela — plantão`;
 
 const HELIO_MACHADO_RAW = `bom dia
 UPA HELIO MACHADO
@@ -89,20 +113,28 @@ sem ambulancia aqui, manda viatura pfv
 
 PA 150/90 FC 96 sat 96%`;
 
+const BROTAS_RAW = `Drs bom dia, UPA BROTAS
+pcte Diogo Vasconcelos 36a, bateu a cabeça em queda
+parece q ta com hemorragia, tc de cranio com urgencia
+destino roberto santos? ou hge?
+hoje qto antes
+*PA 160/100 FC 105 FR 20 sat 95% gcs 14*`;
+
 const MOCKS: ReadonlyArray<MockTransport> = [
   // ════════════════════════════════════════════════════════════════
   // PRIORIDADE DA REDE — unidades sem ambulância própria
   // ════════════════════════════════════════════════════════════════
 
-  // ─── PA Tancredo Neves / Rodrigo Argolo (4 — densa, urgente) ───
+  // ─── PA Tancredo Neves / Rodrigo Argolo (5) ───
   {
     patientName: "Manoel dos Santos Conceição",
     patientAgeYears: 58,
     patientCns: "707004812350017",
+    patientCpf: "02491830577",
     originUnitCode: "pa_tancredo_neves",
     destination: "Hospital Ana Nery — Hemodinâmica",
-    procedure: "IAM com supra — angioplastia primária",
-    deadlineOffsetMin: -8,
+    procedure: "IAM com supra de ST — angioplastia primária (porta-balão)",
+    deadlineOffsetMin: -6,
     tripType: "one_way",
     status: "em_deslocamento_origem",
     vitals: { pa: "90/60", fc: 118, fr: 24, spo2: 92, glasgow: 15, dextro: 187 },
@@ -110,30 +142,30 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     ambulanceLabel: "USA 02",
     ambulanceKind: "USA",
     whatsappRawText: RODRIGO_ARGOLO_RAW,
-    whatsappOffsetMin: -42,
+    whatsappOffsetMin: -38,
   },
   {
     patientName: "Gilberto Araújo Lima",
     patientAgeYears: 47,
     originUnitCode: "pa_tancredo_neves",
-    destination: "Hospital Geral do Estado — HGE",
-    procedure: "Trauma — ferimento por arma branca em tórax",
-    deadlineOffsetMin: -22,
+    destination: "Hospital Geral do Estado (HGE) — Cirurgia do Trauma",
+    procedure: "Ferimento por arma branca em tórax — drenagem + cirurgia",
+    deadlineOffsetMin: -18,
     tripType: "one_way",
     status: "aguardando_viatura",
     vitals: { pa: "85/55", fc: 132, fr: 28, spo2: 90, glasgow: 14 },
-    diagnoses: ["Hemotórax", "Choque hipovolêmico"],
+    diagnoses: ["Hemotórax traumático", "Choque hipovolêmico"],
   },
   {
     patientName: "Cristiane Borges da Silva",
     patientAgeYears: 31,
     originUnitCode: "pa_tancredo_neves",
-    destination: "Maternidade Tsylla Balbino",
-    procedure: "Internamento obstétrico — pré-eclâmpsia grave",
-    deadlineOffsetMin: 18,
+    destination: "Maternidade Tsylla Balbino — Obstetrícia",
+    procedure: "Pré-eclâmpsia grave — internamento obstétrico",
+    deadlineOffsetMin: 16,
     tripType: "one_way",
     status: "viatura_designada",
-    vitals: { pa: "170/110", fc: 98, fr: 20, spo2: 97, glasgow: 15 },
+    vitals: { pa: "172/112", fc: 98, fr: 20, spo2: 97, glasgow: 15 },
     diagnoses: ["DHEG", "Pré-eclâmpsia grave"],
     ambulanceLabel: "USA 01",
     ambulanceKind: "USA",
@@ -142,22 +174,35 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     patientName: "Severino Bispo de Jesus",
     patientAgeYears: 69,
     originUnitCode: "pa_tancredo_neves",
-    destination: "Hospital Santa Izabel",
-    procedure: "Consulta oftalmológica — pós-operatório",
+    destination: "Hospital Santa Izabel — Oftalmologia",
+    procedure: "Pós-operatório de catarata — reavaliação",
     deadlineOffsetMin: 150,
     tripType: "round_trip",
     status: "novo",
+    vitals: { pa: "138/82", fc: 76, fr: 16, spo2: 98, glasgow: 15 },
+    diagnoses: ["Pós-operatório oftalmológico"],
+  },
+  {
+    patientName: "Adenilson Ramos Cardoso",
+    patientAgeYears: 53,
+    originUnitCode: "pa_tancredo_neves",
+    destination: "Hospital Ana Nery — Nefrologia",
+    procedure: "Hemodiálise — sessão programada (3ª/5ª/sáb)",
+    deadlineOffsetMin: 70,
+    tripType: "round_trip",
+    status: "aguardando_viatura",
+    vitals: { pa: "150/88", fc: 84, fr: 18, spo2: 97, glasgow: 15 },
+    diagnoses: ["Doença renal crônica dialítica"],
   },
 
-  // ─── UPA Bairro da Paz / Orlando Imbassahy (3) ───
+  // ─── UPA Bairro da Paz / Orlando Imbassahy (4) ───
   {
     patientName: "Antônia Ferreira dos Reis",
     patientAgeYears: 74,
-    patientCns: "704003089240528",
     originUnitCode: "upa_bairro_da_paz",
-    destination: "Hospital Geral Roberto Santos",
-    procedure: "Internamento — AVC isquêmico, janela de trombólise",
-    deadlineOffsetMin: 6,
+    destination: "Hospital Geral Roberto Santos — Neurologia",
+    procedure: "AVC isquêmico em janela — trombólise",
+    deadlineOffsetMin: 5,
     tripType: "one_way",
     status: "viatura_designada",
     vitals: { pa: "178/96", fc: 88, fr: 18, spo2: 95, glasgow: 13, dextro: 142 },
@@ -169,32 +214,48 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     patientName: "Wesley Nascimento Pinto",
     patientAgeYears: 23,
     originUnitCode: "upa_bairro_da_paz",
-    destination: "Hospital do Subúrbio",
-    procedure: "Trauma ortopédico — fratura exposta de tíbia",
-    deadlineOffsetMin: 35,
+    destination: "Hospital do Subúrbio — Ortopedia",
+    procedure: "Fratura exposta de tíbia — fixação de urgência",
+    deadlineOffsetMin: 34,
     tripType: "one_way",
     status: "aguardando_viatura",
     vitals: { pa: "120/80", fc: 104, fr: 18, spo2: 98, glasgow: 15 },
-    diagnoses: ["Fratura exposta de tíbia"],
+    diagnoses: ["Fratura exposta de tíbia (Gustilo II)"],
   },
   {
-    patientName: "Dona Marlene Souza Andrade",
+    patientName: "Marlene Souza Andrade",
     patientAgeYears: 66,
     originUnitCode: "upa_bairro_da_paz",
-    destination: "Hospital Ana Nery",
+    destination: "Hospital Ana Nery — Nefrologia",
     procedure: "Hemodiálise — sessão programada",
-    deadlineOffsetMin: 90,
+    deadlineOffsetMin: 95,
     tripType: "round_trip",
     status: "novo",
+    vitals: { pa: "146/86", fc: 80, fr: 16, spo2: 97, glasgow: 15 },
+    diagnoses: ["Doença renal crônica dialítica"],
+  },
+  {
+    patientName: "Domingos Sávio Pereira",
+    patientAgeYears: 60,
+    originUnitCode: "upa_bairro_da_paz",
+    destination: "Hospital Especializado Octávio Mangabeira — Pneumologia",
+    procedure: "DPOC agudizada — suporte ventilatório",
+    deadlineOffsetMin: -10,
+    tripType: "one_way",
+    status: "em_deslocamento_destino",
+    vitals: { pa: "140/84", fc: 110, fr: 28, spo2: 88, glasgow: 15, temp: 37.6 },
+    diagnoses: ["DPOC agudizada", "Insuficiência respiratória"],
+    ambulanceLabel: "USA 04",
+    ambulanceKind: "USA",
   },
 
-  // ─── UPA Hélio Machado (2) ───
+  // ─── UPA Hélio Machado (4) ───
   {
     patientName: "Raimunda Oliveira da Mata",
     patientAgeYears: 81,
     originUnitCode: "upa_helio_machado",
-    destination: "Hospital Geral Roberto Santos",
-    procedure: "Ortopedia — fratura de fêmur",
+    destination: "Hospital Geral Roberto Santos — Ortopedia",
+    procedure: "Fratura de colo de fêmur — internamento ortopédico",
     deadlineOffsetMin: 40,
     tripType: "one_way",
     status: "pendente_revisao",
@@ -203,33 +264,61 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     whatsappRawText: HELIO_MACHADO_RAW,
     whatsappOffsetMin: -15,
     parseConfidence: 0.62,
-    parseWarnings: ["destino sem unidade clínica explícita", "idade por extenso"],
+    parseWarnings: [
+      "destino sem unidade clínica explícita",
+      "idade informada por extenso",
+    ],
   },
   {
     patientName: "João Batista Rocha",
-    patientAgeYears: 60,
+    patientAgeYears: 64,
     originUnitCode: "upa_helio_machado",
-    destination: "Hospital Especializado Octávio Mangabeira",
-    procedure: "Avaliação pneumológica — DPOC agudizada",
-    deadlineOffsetMin: 75,
+    destination: "Hospital Santa Izabel — Cardiologia",
+    procedure: "Avaliação cardiológica — dor torácica atípica",
+    deadlineOffsetMin: 25,
     tripType: "round_trip",
     status: "aguardando_viatura",
-    vitals: { pa: "138/84", fc: 102, fr: 26, spo2: 91, glasgow: 15, temp: 37.6 },
-    diagnoses: ["DPOC agudizada"],
+    vitals: { pa: "158/94", fc: 92, fr: 18, spo2: 97, glasgow: 15, dextro: 121 },
+    diagnoses: ["Dor torácica a esclarecer"],
+  },
+  {
+    patientName: "Maria Aparecida Lopes",
+    patientAgeYears: 49,
+    originUnitCode: "upa_helio_machado",
+    destination: "Hospital Aristides Maltez — Oncologia",
+    procedure: "Quimioterapia — ciclo agendado",
+    deadlineOffsetMin: 180,
+    tripType: "round_trip",
+    status: "novo",
+    vitals: { pa: "124/78", fc: 82, fr: 16, spo2: 98, glasgow: 15 },
+    diagnoses: ["Neoplasia de mama em tratamento"],
+  },
+  {
+    patientName: "Edvaldo Santana Filho",
+    patientAgeYears: 57,
+    originUnitCode: "upa_helio_machado",
+    destination: "Hospital Couto Maia — Infectologia",
+    procedure: "Sepse de foco pulmonar — internamento",
+    deadlineOffsetMin: 8,
+    tripType: "one_way",
+    status: "viatura_designada",
+    vitals: { pa: "96/58", fc: 126, fr: 26, spo2: 90, glasgow: 14, temp: 39.2 },
+    diagnoses: ["Sepse de foco pulmonar"],
+    ambulanceLabel: "USA 01",
+    ambulanceKind: "USA",
   },
 
   // ════════════════════════════════════════════════════════════════
   // DEMAIS UNIDADES
   // ════════════════════════════════════════════════════════════════
 
-  // ─── UPA Pirajá (5 — coluna densa) ───
+  // ─── UPA Pirajá (4) ───
   {
     patientName: "Maria das Graças Souza",
     patientAgeYears: 67,
-    patientCns: "704003089240528",
     originUnitCode: "upa_piraja",
-    destination: "Hospital Manoel Victorino",
-    procedure: "Internamento — pneumonia + ICC descompensada",
+    destination: "Hospital Manoel Victorino — Clínica Médica",
+    procedure: "Pneumonia comunitária + ICC descompensada — internamento",
     deadlineOffsetMin: -14,
     tripType: "one_way",
     status: "em_deslocamento_destino",
@@ -242,11 +331,13 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     patientName: "Edmilson Tavares Brito",
     patientAgeYears: 62,
     originUnitCode: "upa_piraja",
-    destination: "Hospital Ana Nery",
+    destination: "Hospital Ana Nery — Nefrologia",
     procedure: "Hemodiálise — sessão programada",
-    deadlineOffsetMin: 95,
+    deadlineOffsetMin: 90,
     tripType: "round_trip",
     status: "chegou_destino",
+    vitals: { pa: "138/82", fc: 78, fr: 16, spo2: 98, glasgow: 15 },
+    diagnoses: ["Doença renal crônica dialítica"],
     ambulanceLabel: "USB 07",
     ambulanceKind: "USB",
   },
@@ -254,74 +345,81 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     patientName: "Luciana Ferreira Campos",
     patientAgeYears: 33,
     originUnitCode: "upa_piraja",
-    destination: "Maternidade Climério de Oliveira",
-    procedure: "Internamento obstétrico — trabalho de parto prematuro",
-    deadlineOffsetMin: 50,
+    destination: "Maternidade Climério de Oliveira — Alto Risco",
+    procedure: "Trabalho de parto prematuro — internamento obstétrico",
+    deadlineOffsetMin: 28,
     tripType: "one_way",
     status: "novo",
     vitals: { pa: "128/82", fc: 92, fr: 18, spo2: 98, glasgow: 15 },
-    diagnoses: ["Trabalho de parto prematuro"],
+    diagnoses: ["Trabalho de parto prematuro (32 sem)"],
   },
   {
     patientName: "Antônio Carlos Pereira",
     patientAgeYears: 71,
     originUnitCode: "upa_piraja",
-    destination: "Hospital Couto Maia",
-    procedure: "Internamento — sepse de foco urinário",
-    deadlineOffsetMin: 10,
+    destination: "Hospital Couto Maia — Infectologia",
+    procedure: "Sepse de foco urinário — internamento",
+    deadlineOffsetMin: 6,
     tripType: "one_way",
     status: "aguardando_viatura",
     vitals: { pa: "100/60", fc: 124, fr: 26, spo2: 89, glasgow: 13, temp: 39.0 },
     diagnoses: ["Sepse de foco urinário"],
   },
-  {
-    patientName: "Rita de Cássia Mendes",
-    patientAgeYears: 58,
-    originUnitCode: "upa_piraja",
-    destination: "Hospital Aristides Maltez",
-    procedure: "Quimioterapia — ciclo agendado",
-    deadlineOffsetMin: 220,
-    tripType: "round_trip",
-    status: "concluido",
-    ambulanceLabel: "USB 08",
-    ambulanceKind: "USB",
-  },
 
-  // ─── UPA Brotas (2 — com pendente_revisão) ───
+  // ─── UPA Brotas (3) ───
   {
     patientName: "Diogo Vasconcelos Lima",
     patientAgeYears: 36,
     originUnitCode: "upa_brotas",
-    destination: "Hospital Geral Roberto Santos",
-    procedure: "TC crânio — suspeita de hemorragia",
-    deadlineOffsetMin: 70,
+    destination: "Hospital Geral Roberto Santos — Neurocirurgia",
+    procedure: "TCE — TC de crânio, suspeita de hemorragia",
+    deadlineOffsetMin: 12,
     tripType: "round_trip",
     status: "pendente_revisao",
     vitals: { pa: "160/100", fc: 105, fr: 20, spo2: 95, glasgow: 14 },
-    diagnoses: ["TCE", "HSA — descartar"],
+    diagnoses: ["TCE", "HSA — a descartar"],
+    whatsappRawText: BROTAS_RAW,
+    whatsappOffsetMin: -22,
     parseConfidence: 0.55,
-    parseWarnings: ["destino ambíguo (alternativa oferecida)", "urgência sem horário"],
+    parseWarnings: [
+      "destino ambíguo (duas opções oferecidas)",
+      "urgência sem horário explícito",
+    ],
   },
   {
     patientName: "Helena Macedo Quintela",
     patientAgeYears: 52,
     originUnitCode: "upa_brotas",
-    destination: "Hospital Santa Izabel",
-    procedure: "Internamento clínico",
-    deadlineOffsetMin: 60,
+    destination: "Hospital Santa Izabel — Clínica Médica",
+    procedure: "Crise hipertensiva controlada — retorno à origem",
+    deadlineOffsetMin: 55,
     tripType: "one_way",
     status: "retornando_origem",
+    vitals: { pa: "140/88", fc: 80, fr: 16, spo2: 98, glasgow: 15 },
+    diagnoses: ["Crise hipertensiva"],
     ambulanceLabel: "USB 02",
     ambulanceKind: "USB",
   },
+  {
+    patientName: "Robson Carvalho Dias",
+    patientAgeYears: 44,
+    originUnitCode: "upa_brotas",
+    destination: "Hospital São Rafael — Hemodinâmica",
+    procedure: "Cateterismo cardíaco — investigação de angina",
+    deadlineOffsetMin: 130,
+    tripType: "round_trip",
+    status: "novo",
+    vitals: { pa: "134/86", fc: 88, fr: 16, spo2: 97, glasgow: 15, dextro: 110 },
+    diagnoses: ["Angina instável — investigar"],
+  },
 
-  // ─── UPA Barris (2) ───
+  // ─── UPA Barris (3) ───
   {
     patientName: "Fernando Sá Menezes",
-    patientAgeYears: 47,
+    patientAgeYears: 57,
     originUnitCode: "upa_barris",
-    destination: "Hospital Português",
-    procedure: "Avaliação vascular — isquemia de membro",
+    destination: "Hospital Português — Cirurgia Vascular",
+    procedure: "Isquemia arterial aguda de membro — avaliação cirúrgica",
     deadlineOffsetMin: 30,
     tripType: "round_trip",
     status: "viatura_designada",
@@ -334,9 +432,9 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     patientName: "Isabela Nunes Carvalho",
     patientAgeYears: 5,
     originUnitCode: "upa_barris",
-    destination: "Hospital Martagão Gesteira",
-    procedure: "Internamento pediátrico — broncoespasmo grave",
-    deadlineOffsetMin: 12,
+    destination: "Hospital Martagão Gesteira — Pediatria",
+    procedure: "Crise asmática grave — internamento pediátrico",
+    deadlineOffsetMin: -4,
     tripType: "one_way",
     status: "paciente_embarcado",
     vitals: { pa: "95/60", fc: 148, fr: 36, spo2: 88, glasgow: 15, temp: 38.2 },
@@ -344,14 +442,26 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     ambulanceLabel: "USA 04",
     ambulanceKind: "USA",
   },
+  {
+    patientName: "Otávio Mendonça Reis",
+    patientAgeYears: 78,
+    originUnitCode: "upa_barris",
+    destination: "Hospital da Cidade — Clínica Médica",
+    procedure: "Internamento — desidratação e infecção urinária",
+    deadlineOffsetMin: null,
+    tripType: "one_way",
+    status: "aguardando_viatura",
+    vitals: { pa: "110/70", fc: 92, fr: 18, spo2: 95, glasgow: 14, temp: 37.5 },
+    diagnoses: ["ITU", "Desidratação"],
+  },
 
-  // ─── HMUM — Hospital Municipal (2 — transferências) ───
+  // ─── HMUM — Hospital Municipal (3) ───
   {
     patientName: "Anderson Cruz Bandeira",
     patientAgeYears: 44,
     originUnitCode: "hmum",
-    destination: "Hospital Geral do Estado — UTI",
-    procedure: "Transferência UTI — politrauma",
+    destination: "Hospital Geral do Estado (HGE) — UTI",
+    procedure: "Transferência UTI — politrauma por acidente de trânsito",
     deadlineOffsetMin: 8,
     tripType: "one_way",
     status: "em_deslocamento_origem",
@@ -364,45 +474,63 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     patientName: "Terezinha de Jesus Alves",
     patientAgeYears: 88,
     originUnitCode: "hmum",
-    destination: "Hospital da Cidade",
-    procedure: "Internamento — desidratação e ITU",
-    deadlineOffsetMin: 130,
+    destination: "Hospital da Cidade — Clínica Médica",
+    procedure: "Internamento clínico — ITU e desidratação",
+    deadlineOffsetMin: 120,
     tripType: "one_way",
     status: "novo",
-    vitals: { pa: "110/70", fc: 90, fr: 18, spo2: 95, glasgow: 14, temp: 37.4 },
+    vitals: { pa: "112/70", fc: 90, fr: 18, spo2: 95, glasgow: 14, temp: 37.4 },
+    diagnoses: ["ITU", "Desidratação"],
+  },
+  {
+    patientName: "Sérgio Murilo Andrade",
+    patientAgeYears: 51,
+    originUnitCode: "hmum",
+    destination: "Hospital Geral Roberto Santos — Gastroenterologia",
+    procedure: "Hemorragia digestiva alta — endoscopia de urgência",
+    deadlineOffsetMin: -2,
+    tripType: "one_way",
+    status: "paciente_embarcado",
+    vitals: { pa: "98/62", fc: 116, fr: 20, spo2: 96, glasgow: 15 },
+    diagnoses: ["Hemorragia digestiva alta"],
+    ambulanceLabel: "USB 03",
+    ambulanceKind: "USB",
   },
 
   // ─── PA Pernambués (2) ───
   {
-    patientName: "Roberto Nogueira Filho",
-    patientAgeYears: 66,
-    originUnitCode: "pa_pernambues",
-    destination: "Hospital Couto Maia",
-    procedure: "Avaliação infectológica",
-    deadlineOffsetMin: 20,
-    tripType: "round_trip",
-    status: "novo",
-  },
-  {
     patientName: "Patrícia Gomes Teixeira",
     patientAgeYears: 39,
     originUnitCode: "pa_pernambues",
-    destination: "Hospital Juliano Moreira",
-    procedure: "Avaliação psiquiátrica — surto agudo",
+    destination: "Hospital Juliano Moreira — Psiquiatria",
+    procedure: "Surto psicótico agudo — avaliação psiquiátrica",
     deadlineOffsetMin: 45,
     tripType: "one_way",
     status: "aguardando_viatura",
-    diagnoses: ["Surto psicótico"],
+    vitals: { pa: "132/84", fc: 98, fr: 18, spo2: 98, glasgow: 15 },
+    diagnoses: ["Surto psicótico agudo"],
+  },
+  {
+    patientName: "Roberto Nogueira Filho",
+    patientAgeYears: 66,
+    originUnitCode: "pa_pernambues",
+    destination: "Hospital Couto Maia — Infectologia",
+    procedure: "Erisipela extensa — avaliação infectológica",
+    deadlineOffsetMin: 75,
+    tripType: "round_trip",
+    status: "novo",
+    vitals: { pa: "138/82", fc: 88, fr: 18, spo2: 97, glasgow: 15, temp: 38.0 },
+    diagnoses: ["Erisipela de membro inferior"],
   },
 
-  // ─── UPA Valéria (1 — atrasado urgente) ───
+  // ─── UPA Valéria (2) ───
   {
     patientName: "Jailson Pereira dos Anjos",
     patientAgeYears: 28,
     originUnitCode: "upa_valeria",
-    destination: "Hospital Geral do Estado — HGE",
-    procedure: "Neurocirurgia — TCE por acidente de moto",
-    deadlineOffsetMin: -28,
+    destination: "Hospital Geral do Estado (HGE) — Neurocirurgia",
+    procedure: "TCE grave por acidente de moto — neurocirurgia",
+    deadlineOffsetMin: -26,
     tripType: "one_way",
     status: "paciente_embarcado",
     vitals: { pa: "90/55", fc: 130, fr: 28, spo2: 91, glasgow: 8 },
@@ -410,29 +538,54 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     ambulanceLabel: "USA 02",
     ambulanceKind: "USA",
   },
+  {
+    patientName: "Sandra Quirino Matos",
+    patientAgeYears: 61,
+    originUnitCode: "upa_valeria",
+    destination: "Hospital Manoel Victorino — Clínica Médica",
+    procedure: "Descompensação diabética — internamento",
+    deadlineOffsetMin: 50,
+    tripType: "one_way",
+    status: "aguardando_viatura",
+    vitals: { pa: "128/80", fc: 104, fr: 22, spo2: 96, glasgow: 15, dextro: 412 },
+    diagnoses: ["Cetoacidose diabética"],
+  },
 
-  // ─── UPA Santo Antônio (1) ───
+  // ─── UPA Santo Antônio (2) ───
   {
     patientName: "Carla Tavares Ribeiro",
     patientAgeYears: 41,
     originUnitCode: "upa_santo_antonio",
-    destination: "Hospital São Rafael",
-    procedure: "Cateterismo cardíaco — eletivo",
+    destination: "Hospital São Rafael — Hemodinâmica",
+    procedure: "Cateterismo cardíaco eletivo",
     deadlineOffsetMin: 120,
     tripType: "round_trip",
     status: "viatura_designada",
     vitals: { pa: "130/85", fc: 84, fr: 16, spo2: 98, glasgow: 15 },
+    diagnoses: ["Angina estável — investigar"],
     ambulanceLabel: "USB 03",
     ambulanceKind: "USB",
   },
+  {
+    patientName: "Nilton Barreto Souza",
+    patientAgeYears: 70,
+    originUnitCode: "upa_santo_antonio",
+    destination: "Hospital Aliança — Cardiologia",
+    procedure: "Bradiarritmia — avaliação para marcapasso",
+    deadlineOffsetMin: 40,
+    tripType: "round_trip",
+    status: "novo",
+    vitals: { pa: "118/72", fc: 42, fr: 16, spo2: 97, glasgow: 15 },
+    diagnoses: ["Bloqueio atrioventricular total"],
+  },
 
-  // ─── UPA Paripe (1 — Subúrbio) ───
+  // ─── UPA Paripe (2 — Subúrbio) ───
   {
     patientName: "Joana Ribeiro da Paixão",
     patientAgeYears: 84,
     originUnitCode: "upa_paripe",
-    destination: "Hospital do Subúrbio",
-    procedure: "Internamento — insuficiência cardíaca",
+    destination: "Hospital do Subúrbio — Clínica Médica",
+    procedure: "ICC descompensada — internamento",
     deadlineOffsetMin: 38,
     tripType: "one_way",
     status: "em_deslocamento_destino",
@@ -441,61 +594,146 @@ const MOCKS: ReadonlyArray<MockTransport> = [
     ambulanceLabel: "USB 05",
     ambulanceKind: "USB",
   },
+  {
+    patientName: "Adriana Souza Pinto",
+    patientAgeYears: 29,
+    originUnitCode: "upa_paripe",
+    destination: "Maternidade Tsylla Balbino — Obstetrícia",
+    procedure: "Hiperêmese gravídica — internamento",
+    deadlineOffsetMin: 100,
+    tripType: "one_way",
+    status: "novo",
+    vitals: { pa: "108/66", fc: 96, fr: 18, spo2: 99, glasgow: 15 },
+    diagnoses: ["Hiperêmese gravídica"],
+  },
 
-  // ─── PA São Marcos (1 — cancelado) ───
+  // ─── PA São Marcos (2) ───
   {
     patientName: "Reinaldo Borges Sampaio",
     patientAgeYears: 55,
     originUnitCode: "pa_sao_marcos",
-    destination: "Hospital Geral Cleriston Andrade (Feira de Santana)",
-    procedure: "Avaliação cardiológica",
+    destination: "Hospital Geral Cleriston Andrade (Feira de Santana) — Referência",
+    procedure: "Avaliação cardiológica — transferência inter-municipal",
     deadlineOffsetMin: 60,
     tripType: "round_trip",
     status: "cancelado",
+    vitals: { pa: "130/84", fc: 86, fr: 16, spo2: 98, glasgow: 15 },
+    diagnoses: ["Insuficiência coronariana crônica"],
+  },
+  {
+    patientName: "Lúcia Helena Farias",
+    patientAgeYears: 63,
+    originUnitCode: "pa_sao_marcos",
+    destination: "Hospital Geral Roberto Santos — Neurologia",
+    procedure: "AVC isquêmico estabilizado — internamento",
+    deadlineOffsetMin: 20,
+    tripType: "one_way",
+    status: "viatura_designada",
+    vitals: { pa: "164/92", fc: 82, fr: 18, spo2: 96, glasgow: 14, dextro: 138 },
+    diagnoses: ["AVC isquêmico"],
+    ambulanceLabel: "USB 04",
+    ambulanceKind: "USB",
   },
 
-  // ─── PA Alfredo Bureau (1) ───
+  // ─── PA Alfredo Bureau (2) ───
   {
     patientName: "Vanessa Almeida Cerqueira",
     patientAgeYears: 45,
     originUnitCode: "pa_alfredo_bureau",
-    destination: "Hospital Português",
-    procedure: "Endoscopia digestiva alta — HDA",
-    deadlineOffsetMin: 25,
+    destination: "Hospital Português — Gastroenterologia",
+    procedure: "Hemorragia digestiva alta — endoscopia",
+    deadlineOffsetMin: 22,
     tripType: "round_trip",
     status: "aguardando_viatura",
     vitals: { pa: "108/68", fc: 108, fr: 18, spo2: 97, glasgow: 15 },
     diagnoses: ["Hemorragia digestiva alta"],
   },
-
-  // ─── PA Maria da Conceição (1 — concluído com fade) ───
   {
-    patientName: "Cleberson Matos Figueiredo",
-    patientAgeYears: 41,
-    originUnitCode: "pa_maria_conceicao",
-    destination: "Hospital Couto Maia",
-    procedure: "Internamento — meningite",
-    deadlineOffsetMin: -200,
+    patientName: "Geraldo Magela Pinto",
+    patientAgeYears: 59,
+    originUnitCode: "pa_alfredo_bureau",
+    destination: "Hospital Ana Nery — Cardiologia",
+    procedure: "ICC descompensada — internamento",
+    deadlineOffsetMin: -8,
     tripType: "one_way",
-    status: "concluido",
+    status: "em_deslocamento_destino",
+    vitals: { pa: "150/96", fc: 118, fr: 26, spo2: 91, glasgow: 15 },
+    diagnoses: ["ICC descompensada", "Edema agudo de pulmão"],
     ambulanceLabel: "USA 03",
     ambulanceKind: "USA",
   },
 
-  // ─── UPA Parque São Cristóvão (1) ───
+  // ─── PA Maria da Conceição (2) ───
+  {
+    patientName: "Cleberson Matos Figueiredo",
+    patientAgeYears: 41,
+    originUnitCode: "pa_maria_conceicao",
+    destination: "Hospital Couto Maia — Infectologia",
+    procedure: "Meningite bacteriana — internamento",
+    deadlineOffsetMin: -200,
+    tripType: "one_way",
+    status: "concluido",
+    vitals: { pa: "120/78", fc: 96, fr: 18, spo2: 97, glasgow: 14, temp: 38.6 },
+    diagnoses: ["Meningite bacteriana"],
+    ambulanceLabel: "USA 03",
+    ambulanceKind: "USA",
+  },
+  {
+    patientName: "Eunice Carvalho Brandão",
+    patientAgeYears: 72,
+    originUnitCode: "pa_maria_conceicao",
+    destination: "Hospital Aristides Maltez — Oncologia",
+    procedure: "Radioterapia — sessão agendada",
+    deadlineOffsetMin: 160,
+    tripType: "round_trip",
+    status: "novo",
+    vitals: { pa: "126/76", fc: 78, fr: 16, spo2: 98, glasgow: 15 },
+    diagnoses: ["Neoplasia em tratamento radioterápico"],
+  },
+
+  // ─── UPA Parque São Cristóvão (2) ───
   {
     patientName: "Mateus Rocha Andrade",
     patientAgeYears: 19,
     originUnitCode: "upa_parque_sao_cristovao",
-    destination: "Hospital Geral do Estado — HGE",
-    procedure: "Ortopedia — fratura de antebraço",
+    destination: "Hospital Geral do Estado (HGE) — Ortopedia",
+    procedure: "Fratura de antebraço — redução cirúrgica",
     deadlineOffsetMin: 85,
     tripType: "one_way",
     status: "novo",
     vitals: { pa: "120/75", fc: 88, fr: 16, spo2: 99, glasgow: 15 },
+    diagnoses: ["Fratura de antebraço"],
+  },
+  {
+    patientName: "Rosa Maria Lima Costa",
+    patientAgeYears: 68,
+    originUnitCode: "upa_parque_sao_cristovao",
+    destination: "Hospital Santa Izabel — Clínica Médica",
+    procedure: "Internamento clínico — pneumonia",
+    deadlineOffsetMin: 65,
+    tripType: "one_way",
+    status: "chegou_destino",
+    vitals: { pa: "132/80", fc: 100, fr: 22, spo2: 93, glasgow: 15, temp: 38.3 },
+    diagnoses: ["Pneumonia comunitária"],
+    ambulanceLabel: "USB 08",
+    ambulanceKind: "USB",
   },
 
-  // ─── UPA San Martin — deixada VAZIA de propósito (vai pro rodapé
+  // ─── UPA Periperi (1) ───
+  {
+    patientName: "Manuela Santos Aragão",
+    patientAgeYears: 2,
+    originUnitCode: "upa_periperi",
+    destination: "Hospital Martagão Gesteira — Pediatria",
+    procedure: "Gastroenterite com desidratação grave — internamento",
+    deadlineOffsetMin: 18,
+    tripType: "one_way",
+    status: "aguardando_viatura",
+    vitals: { pa: "85/55", fc: 152, fr: 32, spo2: 96, glasgow: 15, temp: 38.8 },
+    diagnoses: ["Gastroenterite aguda", "Desidratação grave"],
+  },
+
+  // ─── UPA San Martin — deixada VAZIA de propósito (rodapé
   //     "Sem pendências") ───
 ];
 
@@ -513,8 +751,8 @@ async function main() {
     );
   }
 
-  // RESET dev: limpa transportes/eventos/mensagens e units órfãs (códigos
-  // que não estão mais em @samu-cru/shared, ex. seeds antigos).
+  // RESET: limpa transportes/eventos/mensagens e units órfãs (códigos fora
+  // de @samu-cru/shared, ex. seeds antigos do ingest).
   console.log("[seed-mock] reset: truncating transports + whatsapp_messages");
   await db.execute(
     sql`TRUNCATE TABLE transport_requests, transport_events, whatsapp_messages RESTART IDENTITY CASCADE`,
@@ -577,17 +815,16 @@ async function main() {
       m.deadlineOffsetMin === null
         ? null
         : new Date(now.getTime() + m.deadlineOffsetMin * 60_000);
-    // createdAt escalonado pra trás (variação de timeline).
-    const createdAt = new Date(now.getTime() - (idx * 7 + 30) * 60_000);
+    const createdAt = new Date(now.getTime() - (idx * 6 + 25) * 60_000);
     const assignedAt = m.ambulanceLabel
-      ? new Date(createdAt.getTime() + 8 * 60_000)
+      ? new Date(createdAt.getTime() + 9 * 60_000)
       : undefined;
     return {
       whatsappMessageId: waIdByPatient.get(m.patientName),
       patientName: m.patientName,
       patientAgeText: `${m.patientAgeYears}a`,
-      patientCns: m.patientCns,
-      patientCpf: m.patientCpf,
+      patientCns: m.patientCns ?? genCns(idx),
+      patientCpf: m.patientCpf ?? genCpf(idx),
       originUnitId: unitMap.get(m.originUnitCode),
       originUnitRaw: m.originUnitCode,
       destinationName: m.destination,
