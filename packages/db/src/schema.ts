@@ -17,9 +17,13 @@ import {
   TRANSPORT_STATUS,
   TRIP_TYPE,
   UNIT_TYPE,
+  SEVERITY,
+  AMBULANCE_KIND,
   type TransportStatus,
   type TripType,
   type UnitType,
+  type Severity,
+  type AmbulanceKind,
   type Vitals,
 } from "@samu-cru/shared";
 
@@ -43,6 +47,16 @@ export const unitTypeEnum = pgEnum(
   UNIT_TYPE as unknown as [UnitType, ...UnitType[]],
 );
 
+export const severityEnum = pgEnum(
+  "severity",
+  SEVERITY as unknown as [Severity, ...Severity[]],
+);
+
+export const ambulanceKindEnum = pgEnum(
+  "ambulance_kind",
+  AMBULANCE_KIND as unknown as [AmbulanceKind, ...AmbulanceKind[]],
+);
+
 /* ─── units ───────────────────────────────────────────────────────────────
  * 17 unidades de origem (UPAs, PAs, hospital municipal). Seed em seed.ts.
  * `aliases` alimenta o matcher fuzzy do parser (PLANNING §7).
@@ -53,6 +67,8 @@ export const units = pgTable("units", {
   name: varchar("name", { length: 120 }).notNull(),
   type: unitTypeEnum("type").notNull(),
   isOrigin: boolean("is_origin").notNull().default(true),
+  /** Unidade sem ambulância própria — entra na faixa "Prioridade da rede". */
+  noOwnAmbulance: boolean("no_own_ambulance").notNull().default(false),
   aliases: text("aliases").array(),
   displayOrder: integer("display_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -151,6 +167,18 @@ export const transportRequests = pgTable(
 
     // Operacional
     status: transportStatusEnum("status").notNull().default("novo"),
+    /** Override de gravidade pelo regulador. null = usar deriveSeverity(). */
+    severityOverride: severityEnum("severity_override"),
+    /** Ordem manual dentro da coluna da unidade. null = ordenar por urgência. */
+    manualRank: integer("manual_rank"),
+    /** Prefixo da viatura vinculada pelo regulador (ex.: "USA 02"). */
+    ambulanceLabel: varchar("ambulance_label", { length: 32 }),
+    /** Tipo da viatura vinculada (USB | USA). */
+    ambulanceKind: ambulanceKindEnum("ambulance_kind"),
+    /** Quando a viatura foi vinculada — base da contagem de resposta. */
+    ambulanceAssignedAt: timestamp("ambulance_assigned_at", {
+      withTimezone: true,
+    }),
     parseConfidence: real("parse_confidence").notNull().default(1.0),
     parseWarnings: text("parse_warnings").array(),
     notes: text("notes"),
@@ -167,6 +195,10 @@ export const transportRequests = pgTable(
     originIdx: index("transport_requests_origin_idx").on(t.originUnitId),
     deadlineIdx: index("transport_requests_deadline_idx").on(t.deadlineAt),
     createdAtIdx: index("transport_requests_created_at_idx").on(t.createdAt),
+    manualRankIdx: index("transport_requests_manual_rank_idx").on(
+      t.originUnitRaw,
+      t.manualRank,
+    ),
   }),
 );
 

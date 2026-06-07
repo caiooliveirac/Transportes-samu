@@ -8,6 +8,8 @@ export interface UnitSeed {
   /** Aliases para matching fuzzy do parser (PLANNING §7). */
   aliases: string[];
   isOrigin: boolean;
+  /** Unidade sem ambulância própria — entra na faixa "Prioridade da rede". */
+  noOwnAmbulance?: boolean;
   displayOrder: number;
 }
 
@@ -37,6 +39,7 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
       "UPA BAIRRO DA PAZ - ORLANDO IMBASSAHY",
     ],
     isOrigin: true,
+    noOwnAmbulance: true,
     displayOrder: 10,
   },
   {
@@ -69,6 +72,7 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
       "HÉLIO MACHADO",
     ],
     isOrigin: true,
+    noOwnAmbulance: true,
     displayOrder: 40,
   },
   {
@@ -184,6 +188,7 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
       "PA TANCREDO NEVES - RODRIGO ARGOLO",
     ],
     isOrigin: true,
+    noOwnAmbulance: true,
     displayOrder: 130,
   },
   {

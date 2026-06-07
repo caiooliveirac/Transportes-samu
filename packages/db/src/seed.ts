@@ -64,6 +64,7 @@ async function main() {
     name: u.full,
     type: u.type,
     isOrigin: u.isOrigin,
+    noOwnAmbulance: u.noOwnAmbulance ?? false,
     aliases: u.aliases,
     displayOrder: u.displayOrder,
   }));
@@ -79,6 +80,7 @@ async function main() {
         name: sql`excluded.name`,
         type: sql`excluded.type`,
         isOrigin: sql`excluded.is_origin`,
+        noOwnAmbulance: sql`excluded.no_own_ambulance`,
         aliases: sql`excluded.aliases`,
         displayOrder: sql`excluded.display_order`,
       },

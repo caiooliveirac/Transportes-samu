@@ -1,11 +1,28 @@
 "use client";
 
-import { ArrowRight, Clock, HelpCircle, RefreshCcw } from "lucide-react";
-import { STATUS, type TripType } from "@samu-cru/shared";
+// Mini-card enriquecido do painel grid. Hierarquia: destino + horário
+// dominam (linha 1); gravidade + status + suspeita (linha 2); paciente +
+// countdown (linha 3). Trilho de arrastar à esquerda + setas ↑/↓ no hover
+// (fallback). Abre o Sheet ao clicar no corpo.
+//
+// Decisão de prazo: "hora marcada no destino" (agendado) foi ADIADA — por
+// ora todo deadline é tratado como limite clínico. Quando voltar, derive
+// `agendado` do procedimento/tipo e troque o rótulo "limite"→"marcada".
 
+import {
+  Ambulance,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  HelpCircle,
+  RefreshCcw,
+} from "lucide-react";
+import { STATUS, type TripType } from "@samu-cru/shared";
 import { firstNameAndInitial, formatHHMM, formatRelative } from "@/lib/format";
-import { isFaded, urgencyTone } from "@/lib/urgency";
+import { isFaded, isOverdue, isUrgent } from "@/lib/urgency";
 import type { SerializedTransport } from "@/lib/dashboard-types";
+import { SeverityBadge } from "./severity-badge";
 import { cn } from "@/lib/utils";
 
 const TRIP_ICON: Record<TripType, typeof ArrowRight> = {
@@ -14,98 +31,172 @@ const TRIP_ICON: Record<TripType, typeof ArrowRight> = {
   unknown: HelpCircle,
 };
 
-const TRIP_LABEL: Record<TripType, string> = {
-  one_way: "Só ida",
-  round_trip: "Ida e volta",
-  unknown: "Tipo de viagem ?",
-};
-
-interface TransportCardProps {
+interface Props {
   transport: SerializedTransport;
   now: Date;
-  onSelect?: (id: string) => void;
-  isSelected?: boolean;
+  index: number;
+  total: number;
+  onSelect: (id: string) => void;
+  onMove: (id: string, dir: -1 | 1) => void;
+  drag: {
+    draggingId: string | null;
+    onDragStart: (id: string) => void;
+    onDragEnter: (id: string) => void;
+    onDragEnd: () => void;
+  };
 }
 
 export function TransportCard({
   transport,
   now,
+  index,
+  total,
   onSelect,
-  isSelected,
-}: TransportCardProps) {
-  const status = transport.status;
-  const meta = STATUS[status];
-  const tone = urgencyTone(transport.deadlineAt, status, now);
-  const faded = isFaded(status, transport.updatedAt, now);
+  onMove,
+  drag,
+}: Props) {
+  const meta = STATUS[transport.status];
   const TripIcon = TRIP_ICON[transport.tripType];
+  const overdue = isOverdue(transport.deadlineAt, transport.status, now);
+  const urgent = isUrgent(transport.deadlineAt, transport.status, now);
+  const faded = isFaded(transport.status, transport.updatedAt, now);
   const deadline = transport.deadlineAt ? new Date(transport.deadlineAt) : null;
-  const deadlineLabel = deadline ? formatHHMM(deadline) : "—";
-  const deadlineRelative = deadline ? formatRelative(deadline, now) : "";
-
-  // Title nativo no botão em vez de Radix Tooltip — Radix interceptava o
-  // primeiro click em touch devices (e em algumas combinações de browser
-  // + asChild) impedindo o Sheet de detalhes de abrir. Title HTML é mais
-  // simples e funciona em qualquer device sem comprometer o click.
-  const hoverHint = [
-    firstNameAndInitial(transport.patientName),
-    meta.label,
-    deadlineRelative && `deadline ${deadlineRelative}`,
-    TRIP_LABEL[transport.tripType],
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const dragging = drag.draggingId === transport.id;
+  const timeColor = overdue
+    ? "text-rose-300"
+    : urgent
+      ? "text-amber-300"
+      : "text-zinc-300";
+  const hyp = transport.diagnoses?.[0] ?? transport.procedure;
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(transport.id)}
-      title={hoverHint}
-      data-tone={tone}
-      data-selected={isSelected ? "true" : undefined}
+    <div
+      draggable
+      onDragStart={(e) => {
+        drag.onDragStart(transport.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragEnter={() => drag.onDragEnter(transport.id)}
+      onDragEnd={drag.onDragEnd}
+      onDragOver={(e) => e.preventDefault()}
       className={cn(
-        "group bg-ink-100 hover:bg-ink-150 relative flex w-full cursor-pointer items-center gap-2 rounded-md border-l-4 py-2 pr-2.5 pl-3 text-left ring-1 ring-white/[0.04] transition-colors duration-150 hover:ring-white/10",
+        "group/card bg-ink-100 hover:bg-ink-150 relative flex items-stretch rounded-md border-l-[3px] ring-1 ring-white/[0.05] transition-colors duration-150 hover:ring-white/10",
         meta.borderClass,
-        tone === "overdue" && "ring-rose-600/30 hover:ring-rose-500/40",
-        tone === "urgent" && "animate-card-pulse",
-        faded && "opacity-50",
-        status === "cancelado" &&
+        overdue && "ring-rose-600/30",
+        urgent && !overdue && "animate-card-pulse",
+        faded && "opacity-45",
+        dragging && "opacity-30 ring-sky-400/50",
+        transport.status === "cancelado" &&
           "[&_.dest]:text-zinc-500 [&_.dest]:line-through",
-        isSelected && "ring-sky-400/50 hover:ring-sky-400/70",
       )}
     >
-      <TripIcon
-        aria-hidden
-        className="h-3.5 w-3.5 shrink-0 text-zinc-500"
-        strokeWidth={2.25}
-      />
-      <div className="flex min-w-0 flex-1 items-center gap-2 text-[12.5px]">
-        <span className="dest truncate font-semibold text-zinc-100">
-          {transport.destinationName}
-        </span>
-        <span className="text-zinc-600">·</span>
-        <span
-          className={cn(
-            "shrink-0 font-mono tabular-nums",
-            tone === "overdue"
-              ? "text-rose-300"
-              : tone === "urgent"
-                ? "text-amber-300"
-                : "text-zinc-400",
-          )}
-        >
-          {deadlineLabel}
-        </span>
-        <span className="hidden text-zinc-600 md:inline">·</span>
-        <span className="hidden truncate text-zinc-500 md:inline">
-          {transport.procedure}
-        </span>
+      <div
+        className="flex w-4 shrink-0 cursor-grab items-center justify-center text-zinc-700 group-hover/card:text-zinc-500 active:cursor-grabbing"
+        title="Arrastar para reordenar"
+      >
+        <GripVertical className="h-3 w-3" />
       </div>
-      {tone === "overdue" && (
-        <Clock
-          aria-hidden
-          className="animate-ping-slow h-3 w-3 shrink-0 text-rose-400"
-        />
-      )}
-    </button>
+
+      <button
+        type="button"
+        onClick={() => onSelect(transport.id)}
+        className="flex min-w-0 flex-1 flex-col gap-1 py-1.5 pr-1 pl-0.5 text-left"
+      >
+        <div className="flex items-baseline gap-2">
+          <TripIcon className="h-3 w-3 shrink-0 self-center text-zinc-600" />
+          <span className="dest min-w-0 flex-1 truncate text-[13px] leading-tight font-semibold text-zinc-100">
+            {transport.destinationName}
+          </span>
+          {deadline ? (
+            <span
+              className={cn(
+                "shrink-0 font-mono text-[12.5px] font-semibold tabular-nums",
+                timeColor,
+              )}
+            >
+              {formatHHMM(deadline)}
+            </span>
+          ) : (
+            <span className="shrink-0 font-mono text-[10.5px] text-zinc-600">
+              sem prazo
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <SeverityBadge transport={transport} />
+          <span
+            className={cn(
+              "inline-flex h-[15px] shrink-0 items-center gap-1 rounded px-1.5 text-[10px] font-medium ring-1 ring-inset",
+              meta.pillDarkClass,
+            )}
+          >
+            <span className={cn("h-1 w-1 rounded-full", meta.dotClass)} />
+            {meta.short}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+            {hyp}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-[10.5px] text-zinc-500">
+          <span className="truncate text-zinc-400">
+            {firstNameAndInitial(transport.patientName)}
+            {transport.patientAgeText ? ` · ${transport.patientAgeText}` : ""}
+          </span>
+          {transport.ambulanceLabel && (
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold ring-1 ring-inset",
+                transport.ambulanceKind === "USA"
+                  ? "bg-sky-500/10 text-sky-300/90 ring-sky-500/25"
+                  : "bg-white/[0.04] text-zinc-300 ring-white/10",
+              )}
+              title={`Viatura ${transport.ambulanceLabel}`}
+            >
+              <Ambulance className="h-2.5 w-2.5" />
+              {transport.ambulanceLabel}
+            </span>
+          )}
+          {deadline && (
+            <>
+              <span className="text-zinc-700">·</span>
+              <span
+                className={
+                  overdue
+                    ? "text-rose-400"
+                    : urgent
+                      ? "text-amber-400/90"
+                      : "text-zinc-500"
+                }
+              >
+                limite {formatRelative(deadline, now)}
+              </span>
+            </>
+          )}
+        </div>
+      </button>
+
+      <div className="flex w-5 shrink-0 flex-col items-center justify-center gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100">
+        <button
+          type="button"
+          disabled={index === 0}
+          onClick={() => onMove(transport.id, -1)}
+          title="Subir"
+          className="text-zinc-600 hover:text-sky-300 disabled:opacity-20 disabled:hover:text-zinc-600"
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          disabled={index === total - 1}
+          onClick={() => onMove(transport.id, 1)}
+          title="Descer"
+          className="text-zinc-600 hover:text-sky-300 disabled:opacity-20 disabled:hover:text-zinc-600"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
   );
 }
