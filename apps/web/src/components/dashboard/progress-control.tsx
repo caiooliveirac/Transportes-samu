@@ -90,7 +90,7 @@ export function ProgressControl({ transport, onPatched }: Props) {
   }
 
   function assign(vlabel: string, vkind: AmbulanceKind) {
-    const trimmed = vlabel.trim();
+    const trimmed = vlabel.trim().toUpperCase();
     if (!trimmed) return;
     setAssigning(false);
     setCustom("");
@@ -117,6 +117,10 @@ export function ProgressControl({ transport, onPatched }: Props) {
   }
 
   const fleet = AMBULANCES.filter((a) => a.kind === kind);
+  const q = custom.trim().toUpperCase();
+  const fleetShown = q
+    ? fleet.filter((a) => a.label.toUpperCase().includes(q))
+    : fleet;
 
   return (
     <div className="flex flex-col gap-4">
@@ -201,33 +205,14 @@ export function ProgressControl({ transport, onPatched }: Props) {
                 </button>
               )}
             </div>
-            {/* frota */}
-            <div className="grid max-h-40 grid-cols-2 gap-1 overflow-y-auto">
-              {fleet.map((a) => (
-                <button
-                  key={a.label}
-                  type="button"
-                  disabled={saving}
-                  onClick={() => assign(a.label, a.kind)}
-                  className="bg-ink-100 hover:bg-ink-150 flex items-center gap-1.5 rounded px-2 py-1.5 text-left ring-1 ring-inset ring-white/[0.05] disabled:opacity-50"
-                >
-                  <span className="font-mono text-[12px] font-semibold text-zinc-100">
-                    {a.label}
-                  </span>
-                  <span className="truncate text-[10.5px] text-zinc-500">
-                    {a.base}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {/* livre */}
+            {/* filtrar ou digitar */}
             <div className="flex items-center gap-1.5">
               <input
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && assign(custom, kind)}
-                placeholder="Outra viatura (ex.: USA 09)"
-                className="bg-ink-200 h-7 flex-1 rounded-md px-2 text-[12px] text-zinc-100 ring-1 ring-inset ring-white/10 placeholder:text-zinc-600 focus:ring-2 focus:ring-sky-400 focus:outline-none"
+                placeholder={`Filtrar ou digitar (ex.: ${kind === "USA" ? "PM04" : "PM41"})`}
+                className="bg-ink-200 h-7 flex-1 rounded-md px-2 font-mono text-[12px] text-zinc-100 uppercase ring-1 ring-inset ring-white/10 placeholder:normal-case placeholder:text-zinc-600 focus:ring-2 focus:ring-sky-400 focus:outline-none"
               />
               <button
                 type="button"
@@ -237,6 +222,26 @@ export function ProgressControl({ transport, onPatched }: Props) {
               >
                 Vincular
               </button>
+            </div>
+            {/* frota */}
+            <div className="grid max-h-44 grid-cols-4 gap-1 overflow-y-auto">
+              {fleetShown.map((a) => (
+                <button
+                  key={a.label}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => assign(a.label, a.kind)}
+                  className="bg-ink-100 hover:bg-ink-150 rounded px-2 py-1.5 text-center font-mono text-[12px] font-semibold text-zinc-100 ring-1 ring-inset ring-white/[0.05] hover:text-sky-200 disabled:opacity-50"
+                >
+                  {a.label}
+                </button>
+              ))}
+              {fleetShown.length === 0 && (
+                <span className="col-span-4 px-2 py-3 text-center text-[11px] text-zinc-600">
+                  Nenhuma viatura {kind} com “{custom.trim()}”. Use “Vincular”
+                  para registrar mesmo assim.
+                </span>
+              )}
             </div>
           </div>
         )}
