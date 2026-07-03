@@ -1,9 +1,17 @@
 name: CI → Deploy
 
-# Mesmo padrão validado em caiooliveirac/plantoes: o runner self-hosted
-# É a EC2 de produção. Não há SSH-from-GH; o deploy é simplesmente
-# `cd /home/ubuntu/transportes-samu && bash scripts/deploy-production.sh`
-# executando localmente no runner.
+# Mesmo padrão validado em caiooliveirac/plantoes (PR #58): o runner
+# self-hosted É a EC2 de produção (2 vCPU / 8GB, compartilhada com
+# plantoes e checagem). Não há SSH-from-GH; o deploy é simplesmente
+# rodar scripts/deploy-production.sh localmente no runner.
+#
+# O trabalho pesado (pnpm install, lint, typecheck, build, testes) roda
+# em ubuntu-latest — na EC2 esses passos já esgotaram RAM+swap e
+# derrubaram o host. A EC2 só baixa o artefato pronto, troca
+# atomicamente e recarrega o PM2. O output de `next build` é JS puro
+# (independente de arquitetura), então buildar em x64 e rodar em arm64
+# é seguro; node_modules nativos continuam sendo instalados no host
+# quando o lockfile muda.
 
 on:
   push:
@@ -20,14 +28,32 @@ concurrency:
 jobs:
   # ────────────────────────────────────────────────────────────────────
   # Gate rápido: smoke do que pode quebrar em prod (lint, typecheck,
-  # build, testes do parser). Roda em PR e push para main.
+  # build, testes do parser). Roda em PR e push para main — no runner
+  # do GitHub, NÃO na EC2. Publica o build como artefato pro deploy.
   # ────────────────────────────────────────────────────────────────────
   gate:
-    name: lint · typecheck · build · test
-    runs-on: self-hosted
+    name: lint · typecheck · build · test (GitHub runner)
+    runs-on: ubuntu-latest
+    env:
+      # O build não toca banco: a conexão Drizzle é lazy (packages/db)
+      # e as páginas que leem DB são force-dynamic. Valores dummy só
+      # satisfazem código que valida env. Nada disso é inlinado no
+      # bundle — não há NEXT_PUBLIC_* no app.
+      DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
+      AUTH_SECRET: ci-dummy-secret-please-ignore-32chars!!
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        # Versão vem do campo packageManager do package.json (pnpm@10.x)
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -44,10 +70,31 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Pack build artifact
+        # Único output de build que o runtime usa é apps/web/.next
+        # (PM2 roda `next start`). packages/* exportam .ts direto
+        # (transpilePackages/tsx) e apps/ingest compila com noEmit —
+        # nenhum dist/ é gerado. Caminhos relativos à raiz do repo,
+        # mesmo layout esperado pelo deploy-production.sh.
+        run: |
+          set -euo pipefail
+          [[ -f apps/web/.next/BUILD_ID ]] || { echo "::error::apps/web/.next/BUILD_ID ausente após o build"; exit 1; }
+          tar --exclude='./apps/web/.next/cache' -czf build-output.tgz ./apps/web/.next
+          ls -lh build-output.tgz
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: build-output.tgz
+          retention-days: 3
+          if-no-files-found: error
+
   # ────────────────────────────────────────────────────────────────────
-  # Deploy: apenas push em main após gate verde. O runner é a EC2,
-  # então o "deploy" é só rodar o script local que cuida de install,
-  # migrate, build, pm2 reload e health validation.
+  # Deploy: apenas push em main após gate verde. O runner é a EC2, mas
+  # o trabalho pesado já aconteceu no gate — aqui é só baixar o
+  # artefato e rodar o script local que cuida de install condicional,
+  # migrate, troca atômica do build, pm2 reload e health validation.
   # ────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to production
@@ -59,9 +106,18 @@ jobs:
       - name: Checkout into production dir
         uses: actions/checkout@v4
 
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
       - name: Run deploy script
         env:
           GIT_COMMIT_SHA: ${{ github.sha }}
+          # Artefato buildado no gate (ubuntu-latest); o script extrai
+          # em staging, valida BUILD_ID e troca atomicamente — sem
+          # pnpm build na EC2.
+          DEPLOY_BUILD_ARTIFACT: ${{ github.workspace }}/build-output.tgz
         run: bash scripts/deploy-production.sh
 
       - name: Summary
@@ -75,5 +131,6 @@ jobs:
             echo "| **Commit** | \`${{ github.sha }}\` |"
             echo "| **Branch** | \`${{ github.ref_name }}\` |"
             echo "| **Actor** | @${{ github.actor }} |"
+            echo "| **Build** | artefato pré-buildado no GitHub runner (sem pnpm build na EC2) |"
             echo "| **Public**  | https://transportes.mnrs.com.br |"
           } >> "$GITHUB_STEP_SUMMARY"
