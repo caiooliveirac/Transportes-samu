@@ -3,13 +3,35 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-07-13 · Intercorrências / rastreio de gargalos de tempo
+**Última atualização:** 2026-07-13 · Layout mobile 375px (header responsivo, grid empilhado, sheet full-width)
 
 ---
 
 ## Resume here
 
-**Fase 8 — Intercorrências e demoras (rastreio de gargalos).**
+**Fix — dashboard utilizável em 375px (sem scroll horizontal).**
+
+Causa raiz: linha única do header (marca + busca w-44 + Novo + LiveBadge
++ Admin + Sair, sem wrap) somava ~490px e expandia o viewport; elementos
+fixed herdavam essa largura e apareciam cortados.
+
+- `header.tsx`: container com `flex-wrap`; bloco pills+busca vira segunda
+  linha no mobile (`order-last w-full`, pills com overflow-x sem
+  scrollbar, busca full-width) e volta ao lugar original no `sm+`; "Novo"
+  (desabilitado, Fase 4) oculto no mobile; "Admin" vira só ícone no mobile
+- `dashboard-shell.tsx`: GRID `grid-cols-1` no mobile (empilha unidades),
+  `auto-fill minmax(300px,1fr)` a partir de `sm`; subtítulo "unidades sem
+  ambulância própria" da faixa Prioridade oculto no mobile (cada card já
+  repete a info)
+- `ui/sheet.tsx`: variantes right/left `w-full` no mobile, `sm:w-3/4`
+  (mantém max-w-[480px])
+- Verificado no browser em 375×812 logado: scrollWidth=clientWidth=375,
+  header em 2 linhas, sheet de detalhe full-width íntegro; desktop 1280
+  inalterado. typecheck + lint ok.
+
+## Fase 8 (anterior)
+
+**Intercorrências e demoras (rastreio de gargalos).**
 
 Objetivo: gerar dados sobre por que transportes demoram. Aprovado pelo
 usuário em 2026-07-13; taxonomia de 27 motivos agrupados por fase do
@@ -36,7 +58,7 @@ ciclo (regulação/clínica/origem/trajeto/destino/retorno/outro).
 - Painel de compilação/estatísticas fica pra fase seguinte (dados já
   ficam prontos pra agregar por motivo/fase/unidade)
 - Pendência conhecida (pré-existente, não deste diff): dashboard tem
-  min-width ~484px e corta em viewport 375px — task sugerida à parte
+  min-width ~484px e corta em viewport 375px — RESOLVIDA no fix acima
 
 ## Fase 7 (anterior)
 

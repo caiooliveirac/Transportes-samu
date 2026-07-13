@@ -66,7 +66,8 @@ function isToday(iso: string | null, refIso: string): boolean {
   );
 }
 
-const GRID = "grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3";
+const GRID =
+  "grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]";
 
 export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
   const { data, status: liveStatus } = useLiveDashboard(initial);
@@ -290,7 +291,7 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
                 <h2 className="text-[12px] font-semibold tracking-[0.12em] text-rose-300/90 uppercase whitespace-nowrap">
                   Prioridade da rede
                 </h2>
-                <span className="text-[11px] whitespace-nowrap text-zinc-500">
+                <span className="hidden text-[11px] whitespace-nowrap text-zinc-500 sm:inline">
                   unidades sem ambulância própria
                 </span>
                 <div className="h-px flex-1 bg-gradient-to-r from-rose-500/30 to-transparent" />
