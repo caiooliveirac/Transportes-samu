@@ -12,6 +12,7 @@ import {
   uuid,
   real,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import {
   TRANSPORT_STATUS,
@@ -19,11 +20,13 @@ import {
   UNIT_TYPE,
   SEVERITY,
   AMBULANCE_KIND,
+  DELAY_REASON,
   type TransportStatus,
   type TripType,
   type UnitType,
   type Severity,
   type AmbulanceKind,
+  type DelayReason,
   type Vitals,
 } from "@samu-cru/shared";
 
@@ -55,6 +58,11 @@ export const severityEnum = pgEnum(
 export const ambulanceKindEnum = pgEnum(
   "ambulance_kind",
   AMBULANCE_KIND as unknown as [AmbulanceKind, ...AmbulanceKind[]],
+);
+
+export const delayReasonEnum = pgEnum(
+  "delay_reason",
+  DELAY_REASON as unknown as [DelayReason, ...DelayReason[]],
 );
 
 /* ─── units ───────────────────────────────────────────────────────────────
@@ -182,6 +190,8 @@ export const transportRequests = pgTable(
     parseConfidence: real("parse_confidence").notNull().default(1.0),
     parseWarnings: text("parse_warnings").array(),
     notes: text("notes"),
+    /** Relato livre do regulador sobre a demora, coletado no encerramento. */
+    delayReport: text("delay_report"),
 
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -228,6 +238,37 @@ export const transportEvents = pgTable(
   (t) => ({
     transportIdx: index("transport_events_transport_idx").on(t.transportId),
     kindIdx: index("transport_events_kind_idx").on(t.kind),
+  }),
+);
+
+/* ─── transport_delays ───────────────────────────────────────────────────
+ * Intercorrências / motivos de demora — 1 linha por (transporte, motivo).
+ * Taxonomia vem de DELAY_REASON no shared (fonte única). O regulador marca
+ * chips durante o caso (registro em tempo real) e confirma/ajusta no
+ * encerramento; impactMinutes e o relato livre são facultativos.
+ * Índice único garante o comportamento de toggle sem duplicatas.
+ * ──────────────────────────────────────────────────────────────────────── */
+export const transportDelays = pgTable(
+  "transport_delays",
+  {
+    id: serial("id").primaryKey(),
+    transportId: uuid("transport_id")
+      .references(() => transportRequests.id, { onDelete: "cascade" })
+      .notNull(),
+    reason: delayReasonEnum("reason").notNull(),
+    /** Estimativa do regulador de quantos minutos o motivo custou. */
+    impactMinutes: integer("impact_minutes"),
+    userId: integer("user_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    transportReasonUq: uniqueIndex("transport_delays_transport_reason_uq").on(
+      t.transportId,
+      t.reason,
+    ),
+    reasonIdx: index("transport_delays_reason_idx").on(t.reason),
   }),
 );
 
@@ -280,6 +321,8 @@ export type TransportRequest = typeof transportRequests.$inferSelect;
 export type NewTransportRequest = typeof transportRequests.$inferInsert;
 export type TransportEvent = typeof transportEvents.$inferSelect;
 export type NewTransportEvent = typeof transportEvents.$inferInsert;
+export type TransportDelay = typeof transportDelays.$inferSelect;
+export type NewTransportDelay = typeof transportDelays.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type WorkerHeartbeat = typeof workerHeartbeat.$inferSelect;

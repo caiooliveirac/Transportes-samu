@@ -3,11 +3,42 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-05-27 · Pivot: form de solicitação web substitui ingestão Baileys
+**Última atualização:** 2026-07-13 · Intercorrências / rastreio de gargalos de tempo
 
 ---
 
 ## Resume here
+
+**Fase 8 — Intercorrências e demoras (rastreio de gargalos).**
+
+Objetivo: gerar dados sobre por que transportes demoram. Aprovado pelo
+usuário em 2026-07-13; taxonomia de 27 motivos agrupados por fase do
+ciclo (regulação/clínica/origem/trajeto/destino/retorno/outro).
+
+- `packages/shared/src/delays.ts` — DELAY_REASON (fonte única),
+  DELAY_REASON_META (labels dos chips), DELAY_REASONS_BY_PHASE
+- DB: enum `delay_reason`, tabela `transport_delays` (unique
+  transport_id+reason → toggle idempotente), coluna
+  `transport_requests.delay_report` (relato livre do encerramento).
+  Migration `0006_cuddly_black_widow.sql`
+- Queries: `addTransportDelay`/`removeTransportDelay` (toggle em tempo
+  real, gera transport_events `delay_added`/`delay_removed` pra timeline)
+  e `finalizeTransportDelays` (consolidação transacional no encerramento
+  com impactMinutes + report)
+- API: POST/DELETE/PUT `/api/transports/[id]/delays`
+- UI: `delay-control.tsx` — `DelaySection` no detail-sheet (chips
+  colapsados atrás de "Registrar intercorrência", mobile-first) e
+  `ClosureDialog` (interceptação do status "concluido" no
+  ProgressControl: pergunta "houve demora?", pré-seleciona o que foi
+  marcado durante o caso, minutos facultativos por motivo + relato livre).
+  ClosureDialog renderiza via createPortal(body) — o SheetContent tem
+  transform e quebraria o position:fixed
+- Painel de compilação/estatísticas fica pra fase seguinte (dados já
+  ficam prontos pra agregar por motivo/fase/unidade)
+- Pendência conhecida (pré-existente, não deste diff): dashboard tem
+  min-width ~484px e corta em viewport 375px — task sugerida à parte
+
+## Fase 7 (anterior)
 
 **Pivot arquitetural — desativa Baileys, adota form web direto.**
 
