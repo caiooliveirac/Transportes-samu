@@ -1,6 +1,7 @@
 import type {
   TransportRequest,
   Unit,
+  TransportDelay,
   TransportEvent,
   WhatsappMessage,
 } from "@samu-cru/db";
@@ -21,6 +22,7 @@ export type SerializedRow<T> = {
 export type SerializedTransport = SerializedRow<TransportRequest>;
 export type SerializedUnit = SerializedRow<Unit>;
 export type SerializedTransportEvent = SerializedRow<TransportEvent>;
+export type SerializedTransportDelay = SerializedRow<TransportDelay>;
 export type SerializedWhatsappMessage = SerializedRow<WhatsappMessage>;
 
 export interface DashboardData {
@@ -33,4 +35,5 @@ export interface TransportDetailData {
   transport: SerializedTransport;
   whatsappMessage: SerializedWhatsappMessage | null;
   events: SerializedTransportEvent[];
+  delays: SerializedTransportDelay[];
 }

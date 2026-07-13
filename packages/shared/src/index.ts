@@ -7,3 +7,4 @@ export * from "./priority";
 export * from "./severity";
 export * from "./ambulance";
 export * from "./progression";
+export * from "./delays";

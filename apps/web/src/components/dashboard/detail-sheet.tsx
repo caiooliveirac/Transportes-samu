@@ -35,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "./status-pill";
 import { VitalGrid } from "./vital-grid";
 import { ProgressControl } from "./progress-control";
+import { DelaySection } from "./delay-control";
 import {
   formatAge,
   formatCns,
@@ -119,6 +120,9 @@ export function DetailSheet({ transportId, onClose }: DetailSheetProps) {
                 d ? { ...d, transport: { ...d.transport, ...p } } : d,
               )
             }
+            onDelaysChange={(delays) =>
+              setData((d) => (d ? { ...d, delays } : d))
+            }
           />
         )}
       </SheetContent>
@@ -133,6 +137,7 @@ interface DetailBodyProps {
   showRaw: boolean;
   onToggleRaw: () => void;
   onPatch: (patch: Partial<SerializedTransport>) => void;
+  onDelaysChange: (delays: TransportDetailData["delays"]) => void;
 }
 
 function DetailBody({
@@ -142,8 +147,9 @@ function DetailBody({
   showRaw,
   onToggleRaw,
   onPatch,
+  onDelaysChange,
 }: DetailBodyProps) {
-  const { transport, whatsappMessage, events } = data;
+  const { transport, whatsappMessage, events, delays } = data;
   const meta = STATUS[transport.status];
   const TripIcon = TRIP_ICON[transport.tripType];
   const tripLabel = TRIP_LABEL[transport.tripType];
@@ -228,7 +234,12 @@ function DetailBody({
       </div>
 
       <div className="flex flex-col gap-5 px-5 py-4">
-        <ProgressControl transport={transport} onPatched={onPatch} />
+        <ProgressControl
+          transport={transport}
+          delays={delays}
+          onPatched={onPatch}
+          onDelaysChange={onDelaysChange}
+        />
 
         <Section label="Rota">
           <div className="flex flex-col gap-2 rounded-md bg-white/[0.02] p-3 ring-1 ring-inset ring-white/5">
@@ -256,6 +267,19 @@ function DetailBody({
 
         <Section label="Gravidade">
           <SeverityControl transport={transport} />
+        </Section>
+
+        <Section label="Intercorrências">
+          <DelaySection
+            transportId={transport.id}
+            delays={delays}
+            onChange={onDelaysChange}
+          />
+          {transport.delayReport && (
+            <p className="rounded-md bg-white/[0.02] p-2.5 text-[12px] leading-relaxed text-zinc-300 ring-1 ring-inset ring-white/5">
+              {transport.delayReport}
+            </p>
+          )}
         </Section>
 
         <Section label="Hipóteses">

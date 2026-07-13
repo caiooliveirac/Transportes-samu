@@ -2,7 +2,9 @@ import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import {
   ambulanceKindFromLabel,
   statusAfterAssign,
+  DELAY_REASON_META,
   type AmbulanceKind,
+  type DelayReason,
   type Severity,
   type TransportStatus,
 } from "@samu-cru/shared";
@@ -12,8 +14,10 @@ import {
   units,
   whatsappMessages,
   transportEvents,
+  transportDelays,
   type NewTransportEvent,
   type NewTransportRequest,
+  type TransportDelay,
   type TransportEvent,
   type TransportRequest,
   type Unit,
@@ -67,6 +71,7 @@ export async function findTransportWithContext(id: string): Promise<{
   transport: TransportRequest;
   whatsappMessage: WhatsappMessage | null;
   events: TransportEvent[];
+  delays: TransportDelay[];
 } | undefined> {
   const [transport] = await db
     .select()
@@ -83,16 +88,24 @@ export async function findTransportWithContext(id: string): Promise<{
         .limit(1)
     : [];
 
-  const events = await db
-    .select()
-    .from(transportEvents)
-    .where(eq(transportEvents.transportId, id))
-    .orderBy(asc(transportEvents.createdAt));
+  const [events, delays] = await Promise.all([
+    db
+      .select()
+      .from(transportEvents)
+      .where(eq(transportEvents.transportId, id))
+      .orderBy(asc(transportEvents.createdAt)),
+    db
+      .select()
+      .from(transportDelays)
+      .where(eq(transportDelays.transportId, id))
+      .orderBy(asc(transportDelays.createdAt)),
+  ]);
 
   return {
     transport,
     whatsappMessage: whatsappMessage ?? null,
     events,
+    delays,
   };
 }
 
@@ -420,4 +433,148 @@ export async function updateTransportProgress(
   }
 
   return updated;
+}
+
+/* ─── Intercorrências / demoras ─────────────────────────────────────────── */
+
+/**
+ * Marca uma intercorrência no transporte (toggle "on"). Idempotente:
+ * repetir o mesmo motivo não duplica (unique em transport_id+reason).
+ * Gera evento de auditoria para a timeline do modal.
+ */
+export async function addTransportDelay(
+  transportId: string,
+  reason: DelayReason,
+  userId?: number,
+): Promise<TransportDelay | undefined> {
+  const [row] = await db
+    .insert(transportDelays)
+    .values({ transportId, reason, userId: userId ?? null })
+    .onConflictDoNothing()
+    .returning();
+  if (row) {
+    await db.insert(transportEvents).values({
+      transportId,
+      kind: "delay_added",
+      userId: userId ?? null,
+      toValue: { reason },
+      note: `Intercorrência: ${DELAY_REASON_META[reason].label}`,
+    });
+  }
+  return row;
+}
+
+/**
+ * Desmarca uma intercorrência (toggle "off").
+ */
+export async function removeTransportDelay(
+  transportId: string,
+  reason: DelayReason,
+  userId?: number,
+): Promise<boolean> {
+  const removed = await db
+    .delete(transportDelays)
+    .where(
+      and(
+        eq(transportDelays.transportId, transportId),
+        eq(transportDelays.reason, reason),
+      ),
+    )
+    .returning();
+  if (removed.length > 0) {
+    await db.insert(transportEvents).values({
+      transportId,
+      kind: "delay_removed",
+      userId: userId ?? null,
+      fromValue: { reason },
+      note: `Intercorrência removida: ${DELAY_REASON_META[reason].label}`,
+    });
+  }
+  return removed.length > 0;
+}
+
+export interface DelayFinalizeItem {
+  reason: DelayReason;
+  impactMinutes?: number | null;
+}
+
+/**
+ * Consolidação no encerramento: substitui o conjunto de intercorrências
+ * pelo informado (com minutos de impacto facultativos) e grava o relato
+ * livre em transport_requests.delay_report. Atômico via transaction.
+ */
+export async function finalizeTransportDelays(
+  transportId: string,
+  delays: DelayFinalizeItem[],
+  report: string | null,
+  userId?: number,
+): Promise<TransportDelay[]> {
+  return db.transaction(async (tx) => {
+    const existing = await tx
+      .select()
+      .from(transportDelays)
+      .where(eq(transportDelays.transportId, transportId));
+
+    const keep = new Set(delays.map((d) => d.reason));
+    const events: NewTransportEvent[] = [];
+
+    for (const row of existing) {
+      if (!keep.has(row.reason)) {
+        await tx
+          .delete(transportDelays)
+          .where(eq(transportDelays.id, row.id));
+        events.push({
+          transportId,
+          kind: "delay_removed",
+          userId: userId ?? null,
+          fromValue: { reason: row.reason },
+          note: `Intercorrência removida: ${DELAY_REASON_META[row.reason].label}`,
+        });
+      }
+    }
+
+    const byReason = new Map(existing.map((r) => [r.reason, r]));
+    for (const item of delays) {
+      const minutes =
+        item.impactMinutes != null && item.impactMinutes > 0
+          ? Math.round(item.impactMinutes)
+          : null;
+      const cur = byReason.get(item.reason);
+      if (!cur) {
+        await tx.insert(transportDelays).values({
+          transportId,
+          reason: item.reason,
+          impactMinutes: minutes,
+          userId: userId ?? null,
+        });
+        events.push({
+          transportId,
+          kind: "delay_added",
+          userId: userId ?? null,
+          toValue: { reason: item.reason, impactMinutes: minutes },
+          note: `Intercorrência: ${DELAY_REASON_META[item.reason].label}`,
+        });
+      } else if (cur.impactMinutes !== minutes) {
+        await tx
+          .update(transportDelays)
+          .set({ impactMinutes: minutes })
+          .where(eq(transportDelays.id, cur.id));
+      }
+    }
+
+    await tx
+      .update(transportRequests)
+      .set({ delayReport: report?.trim() || null, updatedAt: new Date() })
+      .where(eq(transportRequests.id, transportId));
+
+    if (events.length > 0) {
+      await tx.insert(transportEvents).values(events);
+    }
+
+    return tx
+      .select()
+      .from(transportDelays)
+      .where(eq(transportDelays.transportId, transportId))
+      .orderBy(asc(transportDelays.createdAt));
+  });
 }

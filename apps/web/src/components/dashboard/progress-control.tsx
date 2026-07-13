@@ -22,16 +22,28 @@ import {
   type AmbulanceKind,
   type TransportStatus,
 } from "@samu-cru/shared";
-import type { SerializedTransport } from "@/lib/dashboard-types";
+import type {
+  SerializedTransport,
+  SerializedTransportDelay,
+} from "@/lib/dashboard-types";
 import { cn } from "@/lib/utils";
+import { ClosureDialog } from "./delay-control";
 
 interface Props {
   transport: SerializedTransport;
+  delays: SerializedTransportDelay[];
   onPatched: (patch: Partial<SerializedTransport>) => void;
+  onDelaysChange: (delays: SerializedTransportDelay[]) => void;
 }
 
-export function ProgressControl({ transport, onPatched }: Props) {
+export function ProgressControl({
+  transport,
+  delays,
+  onPatched,
+  onDelaysChange,
+}: Props) {
   const [saving, setSaving] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [kind, setKind] = useState<AmbulanceKind>(
     (transport.ambulanceKind as AmbulanceKind) ?? "USA",
@@ -113,6 +125,12 @@ export function ProgressControl({ transport, onPatched }: Props) {
 
   function setStatus(s: TransportStatus) {
     setShowAll(false);
+    // Concluir abre o diálogo de encerramento (houve demora?) antes de
+    // efetivar — o PATCH real acontece no onConfirm do ClosureDialog.
+    if (s === "concluido" && status !== "concluido") {
+      setClosing(true);
+      return;
+    }
     patch({ status: s }, { status: s });
   }
 
@@ -312,6 +330,23 @@ export function ProgressControl({ transport, onPatched }: Props) {
             </button>
           )}
         </div>
+
+        {closing && (
+          <ClosureDialog
+            transportId={transport.id}
+            delays={delays}
+            initialReport={transport.delayReport}
+            onCancel={() => setClosing(false)}
+            onConfirm={() => {
+              setClosing(false);
+              patch({ status: "concluido" }, { status: "concluido" });
+            }}
+            onDelaysSaved={(next, report) => {
+              onDelaysChange(next);
+              onPatched({ delayReport: report });
+            }}
+          />
+        )}
 
         {showAll && (
           <div className="flex flex-wrap gap-1 rounded-md bg-white/[0.02] p-2 ring-1 ring-inset ring-white/5">

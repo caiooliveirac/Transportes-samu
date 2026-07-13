@@ -11,6 +11,8 @@ export type {
   NewTransportRequest,
   TransportEvent,
   NewTransportEvent,
+  TransportDelay,
+  NewTransportDelay,
   User,
   NewUser,
   WorkerHeartbeat,

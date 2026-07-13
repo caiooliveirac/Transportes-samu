@@ -43,6 +43,13 @@
       "when": 1780871374649,
       "tag": "0005_aberrant_goliath",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783982248006,
+      "tag": "0006_cuddly_black_widow",
+      "breakpoints": true
     }
   ]
 }
