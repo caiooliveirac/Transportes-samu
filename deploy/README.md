@@ -8,20 +8,32 @@ PM2 + nginx + Postgres local**.
 
 ## Fluxo automático (depois do bootstrap)
 
+O build roda **fora da EC2** (mesmo padrão do plantoes): install, lint,
+typecheck, `pnpm build` e testes acontecem em `ubuntu-latest`, que publica
+`build-output.tgz` (o `apps/web/.next`) como artefato. O job `deploy`
+(self-hosted, na EC2) só baixa o artefato, valida o `BUILD_ID`, troca o
+`.next` atomicamente e recarrega o PM2 — a EC2 compartilhada não roda mais
+`pnpm install`/`pnpm build` pesados a cada deploy, que já esgotaram
+RAM+swap e derrubaram o host.
+
 ```
 push em main
-  → GH Actions runner (rodando na própria EC2) é acionado
-  → job `gate`:   pnpm lint, typecheck, build, test
-  → job `deploy`: bash scripts/deploy-production.sh
-                  ├── pnpm install --frozen-lockfile
-                  ├── pnpm db:migrate
-                  ├── pnpm build
+  → job `gate` (ubuntu-latest): pnpm install, lint, typecheck, build, test
+                                └── publica build-output.tgz (apps/web/.next)
+  → job `deploy` (runner self-hosted na EC2): baixa o artefato e roda
+    bash scripts/deploy-production.sh
+                  ├── pnpm install --frozen-lockfile (só se pnpm-lock.yaml mudou)
+                  ├── pnpm db:migrate + pnpm db:seed (precisam do banco de prod)
+                  ├── extrai o artefato, valida BUILD_ID e troca apps/web/.next
+                  │   atomicamente (sem pnpm build na EC2)
                   ├── pm2 reload ecosystem.config.cjs --update-env
-                  ├── curl :3005/api/health → ok=true
+                  ├── curl :3008/api/health → ok=true
                   └── curl https://transportes.mnrs.com.br/api/health → 200
 ```
 
 Se qualquer step falha, deploy aborta sem rolar reload — versão atual continua de pé.
+Sem `DEPLOY_BUILD_ARTIFACT` o script ainda aceita build local como fallback
+de **emergência** (warning alto no log).
 
 ---
 
