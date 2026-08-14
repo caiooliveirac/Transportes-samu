@@ -142,6 +142,18 @@ describe("inferTripType", () => {
     expect(inferTripType("TC crânio").value).toBe("round_trip");
   });
 
+  // Como as unidades escrevem de verdade: abreviação seca, sem acento.
+  it("classifies exam abbreviations as round trip", () => {
+    expect(inferTripType("RX DE TORAX").value).toBe("round_trip");
+    expect(inferTripType("USG ABDOME TOTAL").value).toBe("round_trip");
+    expect(inferTripType("ANGIOTC DE TORAX E ABD").value).toBe("round_trip");
+    expect(inferTripType("ECO TRANSTORACICO").value).toBe("round_trip");
+  });
+
+  it("keeps internamento one-way even when the text mentions an exam word", () => {
+    expect(inferTripType("INTERNAMENTO CARDIOLOGICO").value).toBe("one_way");
+  });
+
   it("returns unknown when nothing matches", () => {
     expect(inferTripType("xyz").value).toBe("unknown");
     expect(inferTripType(null).value).toBe("unknown");

@@ -9,7 +9,12 @@ const KEYWORD_INFERENCE: ReadonlyArray<{ pattern: RegExp; canonical: string }> =
   { pattern: /\btransfer(ir|encia|ência)\b/, canonical: "Transferência" },
   { pattern: /\bavalia(r|cao|ção)\b/, canonical: "Avaliação" },
   { pattern: /\bconsulta\b/, canonical: "Consulta" },
-  { pattern: /\b(tc|tomograf|rm|ressonancia|raio.?x|exame)\b/, canonical: "Exame" },
+  {
+    // `RX`, `USG`, `ECO` são como as unidades escrevem — o texto que chega
+    // é "RX DE TORAX", não "raio-x".
+    pattern: /\b(tc|tomograf|rm|ressonancia|raio.?x|rx|usg|ultrassom|eco|endoscopia|eda|angio\w*|exame)\b/,
+    canonical: "Exame",
+  },
   { pattern: /\bhemodialise|hemodi[áa]lise\b/, canonical: "Hemodiálise" },
 ];
 
@@ -64,7 +69,13 @@ export function inferTripType(procedure: string | null): Extracted<TripType> {
   if (/interna|transfer|admiss|trauma|neurocir|cir(urgia|úrgico|úrgica)/.test(lower)) {
     return { value: "one_way", confidence: 0.9, raw: procedure };
   }
-  if (/avalia|consulta|exame|tc\b|tomograf|rm\b|ressonan|hemodi[áa]lise/.test(lower)) {
+  // Exame e consulta são ida-e-volta: a ambulância espera o paciente.
+  // Confundir com internamento tira uma viatura da fila sem necessidade.
+  if (
+    /avalia|consulta|exame|tc\b|tomograf|rm\b|ressonan|raio.?x|\brx\b|\busg\b|ultrassom|\beco\w*|endoscopia|\beda\b|angio\w*|hemodi[áa]lise/.test(
+      lower,
+    )
+  ) {
     return { value: "round_trip", confidence: 0.85, raw: procedure };
   }
   return { value: "unknown", confidence: 0.3, raw: procedure };
