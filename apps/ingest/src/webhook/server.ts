@@ -98,8 +98,9 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 }
 
 /**
- * Servidor do webhook. Só loopback: quem fala com ele é o container do
- * gateway via `host.docker.internal`, nunca a internet.
+ * Servidor do webhook. Quem fala com ele é o container do gateway via
+ * `host.docker.internal`, o que obriga bind em interface não-loopback
+ * (ver ENV.webhookHost). O que protege a porta é o HMAC, não o bind.
  *
  * Responde 2xx só depois de ingerir. Erro vira 500 de propósito — o
  * gateway reenvia, e a mensagem perdida aqui é uma solicitação de

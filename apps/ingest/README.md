@@ -79,8 +79,9 @@ zeram a cada restart.
 |---|---|---|
 | `DATABASE_URL` | — (obrigatória) | Postgres |
 | `WORKER_ID` | `local-dev` | linha em `worker_heartbeat` |
-| `WA_WEBHOOK_PORT` | `3082` | porta local (loopback) |
-| `WA_WEBHOOK_SECRET` | `secret` | HMAC; vazio desliga a checagem |
+| `WA_WEBHOOK_PORT` | `3082` | porta do webhook |
+| `WA_WEBHOOK_HOST` | `0.0.0.0` | interface de bind; `127.0.0.1` não é alcançável pelo container |
+| `WA_WEBHOOK_SECRET` | `secret` | HMAC; vazio desliga a checagem — o worker recusa subir se o bind não for loopback |
 | `WA_ALLOWED_CHATS` | vazio | JIDs separados por vírgula; vazio = todo `@g.us` |
 | `DRY_RUN` | `false` | parseia e loga, não escreve transporte |
 | `LOG_LEVEL` | `info` | |
@@ -102,3 +103,15 @@ curl -X POST http://127.0.0.1:3082/ -H 'Content-Type: application/json' -d '{"ev
 ```bash
 pnpm --filter @samu-cru/ingest test
 ```
+
+## Bind: por que não é loopback
+
+O gateway roda em container e chega pelo `host.docker.internal`, que
+resolve para o host-gateway do Docker (`172.17.0.1`) — **não** para o
+loopback do host. Um worker escutando só em `127.0.0.1` faz todo POST do
+gateway morrer em `context deadline exceeded`, e o gateway desiste após 5
+tentativas. O `giro-wa-adapter` escuta em `0.0.0.0` pelo mesmo motivo.
+
+Isso não expõe a porta na internet: o `ufw` do magalu tem `INPUT DROP` e
+libera só SSH/80/443. O que protege a porta é o HMAC — por isso o worker
+**recusa subir** com `WA_WEBHOOK_SECRET` vazio e bind não-loopback.
