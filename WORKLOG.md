@@ -95,6 +95,10 @@ template, todos estáveis.
 - `ingest:backfill --reparse` re-roda o parser sobre caso já criado. Não
   mexe em status que o regulador moveu; só promove `pendente_revisao` →
   `novo`
+- abreviação de exame (`RX`, `USG`, `ECO`, `ANGIO…`) passa a classificar
+  ida-e-volta. Três casos do Hélio Machado com `RX DE TORAX` ficaram
+  `trip_type: unknown` no primeiro re-parse — a viatura espera o paciente,
+  e marcar errado tira uma da fila sem necessidade
 
 Nota de segurança: ao inspecionar `/proc/<pid>/environ` o
 `WA_WEBHOOK_SECRET` apareceu em terminal. Rotacionar no gateway e no
