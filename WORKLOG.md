@@ -63,6 +63,12 @@ o parser acertava e nada era gravado.
 - `pnpm ingest:backfill` recupera mensagem aprovada que ficou sem
   transporte. Simulação por padrão, `--aplicar` grava. Só age sobre
   `filterVerdict.pass === true`: barrada é corpus, não caso
+- **backfill aplicado em 14/08 17:47**: as 11 solicitações do dia viraram
+  transporte (1 `novo` com conf 0,86; 10 `pendente_revisao`, conf 0,40 a
+  0,72). Nova rodada devolve "nada a recuperar". Duas mensagens de
+  cancelamento circularam no grupo no mesmo dia (12:29 Alfredo Bureau e
+  17:25 "cancelar OC 0534") — o parser não age sobre caso existente, então
+  esses precisam ser cancelados na UI pelo regulador
 
 Nota de segurança: ao inspecionar `/proc/<pid>/environ` o
 `WA_WEBHOOK_SECRET` apareceu em terminal. Rotacionar no gateway e no
