@@ -13,6 +13,7 @@
     "dev": "pnpm --filter @samu-cru/web dev",
     "dev:ingest": "pnpm --filter @samu-cru/ingest dev",
     "ingest:corpus": "pnpm --filter @samu-cru/ingest corpus",
+    "ingest:backfill": "pnpm --filter @samu-cru/ingest backfill",
     "build": "pnpm -r --filter=./apps/* --filter=./packages/* build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

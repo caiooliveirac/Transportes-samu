@@ -9,7 +9,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "corpus": "tsx src/scripts/corpus.ts"
+    "corpus": "tsx src/scripts/corpus.ts",
+    "backfill": "tsx src/scripts/backfill.ts"
   },
   "dependencies": {
     "@samu-cru/db": "workspace:*",
