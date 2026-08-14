@@ -258,21 +258,59 @@ export async function handleMessageEdit(
     .set({ rawText: newRawText, editedAt })
     .where(eq(schema.whatsappMessages.id, waRow.id));
 
-  const parsed = parseMessage({
+  await reparseTransportFromMessage({
+    whatsappMessageDbId: waRow.id,
     rawText: newRawText,
     receivedAt: waRow.receivedAt,
+  });
+
+  // Garante updated_at avança mesmo se nada mudou de fato (raro)
+  void sql; // pacificador do linter — sql usado se quisermos forçar update
+
+  baseLog.info("transport re-parsed after WhatsApp edit");
+}
+
+/**
+ * Re-roda o parser sobre uma mensagem já gravada e atualiza o transport
+ * ligado a ela. Serve à edição no WhatsApp e ao `ingest:backfill --reparse`
+ * (recuperar casos parseados por uma versão pior do parser).
+ *
+ * O que NÃO faz: mexer no status de um caso que o regulador já moveu. O
+ * único avanço permitido é `pendente_revisao` → `novo`, quando o parser
+ * novo preencheu o que faltava.
+ */
+export async function reparseTransportFromMessage(params: {
+  whatsappMessageDbId: number;
+  rawText: string;
+  receivedAt: Date;
+}): Promise<{ updated: number; globalConfidence: number; promoted: boolean }> {
+  const parsed = parseMessage({
+    rawText: params.rawText,
+    receivedAt: params.receivedAt,
   });
   const units = await getUnitsByCode();
   const originResolved = parsed.originUnitCode.value
     ? (units.get(parsed.originUnitCode.value) ?? null)
     : null;
 
-  await db
+  const existing = await db
+    .select({ id: schema.transportRequests.id, status: schema.transportRequests.status })
+    .from(schema.transportRequests)
+    .where(eq(schema.transportRequests.whatsappMessageId, params.whatsappMessageDbId));
+
+  const promote =
+    parsed.suggestedStatus === "novo" &&
+    existing.every((t) => t.status === "pendente_revisao");
+
+  const rows = await db
     .update(schema.transportRequests)
     .set({
       patientName: parsed.patientName.value ?? "(sem nome)",
       patientAgeText: parsed.patientAgeYears.value
         ? `${parsed.patientAgeYears.value}a`
+        : null,
+      patientBirthDate: parsed.patientBirthDate.value
+        ? parsed.patientBirthDate.value.toISOString().slice(0, 10)
         : null,
       patientCns: parsed.patientCns.value,
       patientCpf: parsed.patientCpf.value,
@@ -285,14 +323,17 @@ export async function handleMessageEdit(
       tripType: parsed.tripType.value ?? "unknown",
       vitals: parsed.vitals.value ?? null,
       diagnoses: parsed.diagnoses.value ?? null,
+      ...(promote ? { status: "novo" as const } : {}),
       parseConfidence: parsed.globalConfidence,
       parseWarnings: parsed.warnings.length > 0 ? parsed.warnings : null,
       updatedAt: new Date(),
     })
-    .where(eq(schema.transportRequests.whatsappMessageId, waRow.id));
+    .where(eq(schema.transportRequests.whatsappMessageId, params.whatsappMessageDbId))
+    .returning({ id: schema.transportRequests.id });
 
-  // Garante updated_at avança mesmo se nada mudou de fato (raro)
-  void sql; // pacificador do linter — sql usado se quisermos forçar update
-
-  baseLog.info("transport re-parsed after WhatsApp edit");
+  return {
+    updated: rows.length,
+    globalConfidence: parsed.globalConfidence,
+    promoted: promote && rows.length > 0,
+  };
 }

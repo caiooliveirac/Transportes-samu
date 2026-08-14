@@ -27,5 +27,11 @@ uma mensagem de produção, anonimize **antes** de salvar:
 - Embaralhar últimos dígitos de CNS/CPF
 - Subtrair/adicionar dias da data de procedimento
 
+Os quatro fixtures `*-sigla-destino`, `*-apresentacao-imediata`,
+`*-checkbox-motivo` e `*-ida-imediata` reproduzem os templates que o grupo
+UT APOIO realmente usou em 14/08/2026 — um por unidade. A estrutura é
+idêntica à da mensagem original; nome, CNS e CPF são falsos. São eles que
+provam os quatro formatos que o parser não entendia.
+
 Origem dos dois fixtures iniciais: `design-refs/.../project/src/data.jsx`
 (transportes T-1001 e T-1011, campo `mensagem`).

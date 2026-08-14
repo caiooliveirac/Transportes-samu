@@ -263,6 +263,32 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
  * `transport_requests` (PLANNING §6); esta lista é apenas para autocomplete
  * e matching de redundância nos cards.
  */
+/**
+ * Siglas de destino que as unidades escrevem sozinhas ("DESTINO: HSA").
+ * Sem esta tabela o campo chega ao painel como duas letras e o regulador
+ * tem que traduzir de cabeça.
+ *
+ * `AMBIGUOUS_DESTINATION_ACRONYMS` são as que servem a mais de um
+ * hospital na região — resolvê-las por chute colocaria o paciente no
+ * hospital errado, então ficam como estão, com aviso.
+ */
+export const DESTINATION_ACRONYMS: Readonly<Record<string, string>> = {
+  HMS: "HMS — Hospital Municipal de Salvador",
+  HMV: "HMV — Hospital Manoel Victorino",
+  HGS: "HGS — Hospital Geral do Subúrbio",
+  HMET: "HMET — Hospital Metropolitano",
+  HGE: "HGE — Hospital Geral do Estado",
+  HGRS: "HGRS — Hospital Geral Roberto Santos",
+  HGCA: "HGCA — Hospital Geral Cleriston Andrade",
+  HAN: "HAN — Hospital Ana Nery",
+  HCM: "HCM — Hospital Couto Maia",
+  HEDJ: "HEDJ — Hospital Estadual Dois de Julho",
+  HSA: "HSA — Hospital Santo Antônio",
+  MTB: "MTB — Maternidade Tsylla Balbino",
+};
+
+export const AMBIGUOUS_DESTINATION_ACRONYMS: ReadonlyArray<string> = ["HM", "HG", "HE"];
+
 export const DESTINOS: ReadonlyArray<string> = [
   "Hospital Manoel Victorino",
   "Hospital Couto Maia",

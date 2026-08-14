@@ -13,13 +13,37 @@ const KEYWORD_INFERENCE: ReadonlyArray<{ pattern: RegExp; canonical: string }> =
   { pattern: /\bhemodialise|hemodi[áa]lise\b/, canonical: "Hemodiálise" },
 ];
 
+/**
+ * Alguns templates juntam suspeita e procedimento no mesmo campo:
+ * "SUSPEITA DIAGNÓSTICA // PROCEDIMENTO: FEBRE >> DENGUE? // INTERNAÇÃO".
+ * O procedimento é o que vem depois do último separador.
+ */
+function afterSeparator(val: string): string {
+  const parts = val.split(/\s*(?:\/\/|>>)\s*/);
+  return (parts.length > 1 ? parts[parts.length - 1]! : val).trim();
+}
+
+/**
+ * Motivo em caixinha: "( X )INTERNAMENTO" entre opções vazias. Só a
+ * marcada conta.
+ */
+function checkedBox(seg: Segmented): string | null {
+  for (const line of seg.lines) {
+    const m = line.match(/\(\s*[xX]\s*\)\s*([A-Za-zÀ-ſ][A-Za-zÀ-ſ ]{2,40})/);
+    if (m) return m[1]!.trim().replace(/\s+(qual|com)$/i, "");
+  }
+  return null;
+}
+
 export function extractProcedure(seg: Segmented): Extracted<string> {
   for (const key of PROC_KEYS) {
     const val = seg.labels.get(key);
     if (val && val.length >= 3) {
-      return { value: val.trim(), confidence: 0.95, raw: val };
+      return { value: afterSeparator(val), confidence: 0.95, raw: val };
     }
   }
+  const box = checkedBox(seg);
+  if (box) return { value: box, confidence: 0.9, raw: box };
   // Heurística por palavra-chave em texto livre — confiança média.
   const lower = seg.normalized.toLowerCase();
   for (const k of KEYWORD_INFERENCE) {

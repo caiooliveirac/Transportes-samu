@@ -1,0 +1,16 @@
+{
+  "receivedAt": "2026-08-14T17:30:00Z",
+  "expect": {
+    "patientName": { "equals": "JOANA TESTE RAMOS" },
+    "patientAgeYears": { "equals": 7 },
+    "originUnitCode": { "equals": "upa_helio_machado", "minConfidence": 0.8 },
+    "destination": { "includes": "MANOEL VICTORINO" },
+    "procedure": { "includes": "INTERNAÇÃO PEDIÁTRICA" },
+    "tripType": { "equals": "one_way" },
+    "deadlineLocal": "14:30",
+    "vitals": { "fc": 101, "fr": 18, "spo2": 98, "glasgow": 15 },
+    "diagnosesIncludes": ["DENGUE"],
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.85
+  }
+}
