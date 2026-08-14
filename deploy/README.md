@@ -96,6 +96,22 @@ vírgula; a sessão vive no volume, então **não** precisa re-parear):
 
 ```bash
 WHATSAPP_WEBHOOK=http://host.docker.internal:3081/hook,http://host.docker.internal:3082/hook
+WHATSAPP_WEBHOOK_SECRET=<mesmo valor de WA_WEBHOOK_SECRET>
+```
+
+E libere a porta no `ufw` **para a interface do Docker** — sem isso o POST
+do gateway morre em `context deadline exceeded` e o gateway desiste após 5
+tentativas. É a mesma regra que o `3081` do Giro já tem:
+
+```bash
+sudo ufw allow in on docker0 to any port 3082 proto tcp comment "transportes-ingest webhook do whatsmeow-gw"
+```
+
+Prova de que o caminho está aberto (independe de chegar mensagem):
+
+```bash
+docker exec whatsmeow-gw wget -q -T 8 -O- http://host.docker.internal:3082/
+# → {"status":"ok","worker":"magalu-prod-1","received":0,...}
 ```
 
 Confira que subiu:
@@ -197,16 +213,22 @@ volume força novo pareamento e derruba os **dois** consumidores.
    que os POSTs chegam; `received`/`ingested`/`skipped` dizem o que
    aconteceu com eles. `lastWebhookAt: null` = nada chegou desde o último
    restart, pule para o passo 2. Sem resposta = `pm2 logs transportes-ingest`.
-2. O gateway ainda lista este destino?
+2. O caminho container → host está aberto?
+   `docker exec whatsmeow-gw wget -q -T 8 -O- http://host.docker.internal:3082/`
+   Timeout aqui é quase sempre uma das duas: bind em `127.0.0.1`
+   (`WA_WEBHOOK_HOST` tem que ser alcançável do container) ou a regra de
+   `ufw` em `docker0` faltando — `sudo ufw status numbered | grep 3082`.
+3. O gateway ainda lista este destino?
    `docker inspect whatsmeow-gw --format '{{json .Config.Env}}' | grep WEBHOOK`
    — um `docker run` de manutenção pode ter recriado o container só com
-   o hook do Giro.
-3. O gateway ainda está pareado?
+   o hook do Giro. `docker logs --since 30m whatsmeow-gw | grep -i webhook`
+   mostra os envios e as falhas por URL.
+4. O gateway ainda está pareado?
    `curl -s -u <basic-auth> http://127.0.0.1:3080/app/devices`
-4. Assinatura batendo? `webhook signature mismatch` no log do worker
+5. Assinatura batendo? `webhook signature mismatch` no log do worker
    significa `WA_WEBHOOK_SECRET` diferente do `--webhook-secret` do
    gateway — o worker devolve 401 e o gateway desiste após 5 tentativas.
-5. Chegou mas não virou transporte? Log `webhook event skipped` diz o
+6. Chegou mas não virou transporte? Log `webhook event skipped` diz o
    motivo (`chat_not_allowed` = `WA_ALLOWED_CHATS` errado; `filtered:` =
    heurística de `pipeline/filter.ts` barrou).
 
