@@ -36,11 +36,34 @@ que impedia o PM2 de subir — `EADDRINUSE` em loop, 25 restarts.
   regra equivalente; sem ela o POST do gateway morre em
   `context deadline exceeded`
 
-**Estado da ingestão:** fan-out provado em produção com timestamp casando
-dos dois lados — `Forwarding message.ack to 2 configured webhook(s)` no log
-do gateway e `lastWebhookAt` correspondente no worker. Falta só uma mensagem
-de TEXTO no grupo UT APOIO para virar linha em `whatsapp_messages`
-(`message.ack` é ruído e responde 204 sem contar). Checagem:
+**Estado da ingestão: FUNCIONANDO.** Primeira mensagem real do UT APOIO
+gravada em 2026-08-14 09:39. Fan-out provado com timestamp casando dos dois
+lados no log do gateway e no `lastWebhookAt` do worker.
+
+Proporção observada em produção: ~500 `message.ack` por hora contra ~34
+`message`. O ack é ruído (responde 204, não conta em `received`). Quem
+estiver lendo o log do `giro-wa-adapter` para diagnosticar: ele loga TODO
+evento, inclusive ack, e ack aparece como `len=0` — isso não é mídia sem
+legenda, é ack. Confundir os dois leva a concluir errado que o grupo manda
+solicitação por print. `mediaOnly` no health é quem responde essa pergunta
+de verdade (esteve em 0 o tempo todo).
+
+**A primeira mensagem real já expôs a decisão de produto pendente.** Ela foi
+BARRADA pelo filtro (`not enough hints (2/3)`) e é sobre transporte — mas é
+COBRANÇA de um caso existente ("paciente com risco de perder a vaga",
+"alguma posição?"), não uma solicitação nova. Duas leituras, com
+implementações opostas:
+
+- filtro certo: não havia transporte a criar; baixar o limiar para 2 enche
+  o painel de cobrança e conversa
+- filtro cego: a urgência é o sinal operacional que o regulador quer ver, e
+  hoje some
+
+Nada foi ajustado — o usuário pediu para discutir o treinamento depois, e
+n=1 de madrugada não sustenta mudança de limiar. Deixar o corpus acumular
+antes de mexer em `pipeline/filter.ts`.
+
+Checagem:
 
 ```bash
 ssh magalu 'curl -s http://127.0.0.1:3082/ | jq'
