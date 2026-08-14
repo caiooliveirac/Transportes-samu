@@ -15,6 +15,24 @@ import {
 const MAX_BODY_BYTES = 1_000_000;
 
 /**
+ * Contadores expostos no `GET /`. Existem porque, em `LOG_LEVEL=info`,
+ * um worker que recebe e filtra tudo é indistinguível de um worker que
+ * não recebe nada — e "o gateway ainda está mandando pra cá?" é a
+ * primeira pergunta de todo diagnóstico. `lastWebhookAt` responde sozinha:
+ * conta QUALQUER POST autenticado, inclusive o ruído (ack, presença),
+ * então avança mesmo quando nenhuma mensagem do grupo vigiado chega.
+ */
+const stats = {
+  /** Eventos de mensagem (o ruído do gateway não entra). */
+  received: 0,
+  ingested: 0,
+  skipped: 0,
+  /** Corpo grande, JSON inválido ou assinatura errada. */
+  rejected: 0,
+  lastWebhookAt: null as string | null,
+};
+
+/**
  * Processa um evento já normalizado. Devolve o motivo do descarte (para
  * o log) ou null quando ingeriu.
  *
@@ -91,7 +109,7 @@ export function createWebhookServer(): http.Server {
   return http.createServer((req, res) => {
     if (req.method === "GET") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", worker: ENV.workerId }));
+      res.end(JSON.stringify({ status: "ok", worker: ENV.workerId, ...stats }));
       return;
     }
     if (req.method !== "POST") {
@@ -104,6 +122,7 @@ export function createWebhookServer(): http.Server {
       try {
         body = await readBody(req);
       } catch (err) {
+        stats.rejected += 1;
         logger.warn({ err }, "webhook body rejected");
         res.writeHead(413).end();
         return;
@@ -117,6 +136,7 @@ export function createWebhookServer(): http.Server {
           ENV.webhookSecret,
         )
       ) {
+        stats.rejected += 1;
         logger.warn("webhook signature mismatch");
         res.writeHead(401).end();
         return;
@@ -126,23 +146,30 @@ export function createWebhookServer(): http.Server {
       try {
         msg = normalizeWebhook(JSON.parse(body));
       } catch (err) {
+        stats.rejected += 1;
         logger.warn({ err }, "webhook body is not valid JSON");
         res.writeHead(400).end();
         return;
       }
 
+      stats.lastWebhookAt = new Date().toISOString();
+
       if (!msg) {
         res.writeHead(204).end();
         return;
       }
+      stats.received += 1;
 
       try {
         const skipped = await handleEvent(msg);
         if (skipped) {
+          stats.skipped += 1;
           logger.debug(
             { waMessageId: msg.messageId, remoteJid: msg.chatId, skipped },
             "webhook event skipped",
           );
+        } else {
+          stats.ingested += 1;
         }
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status: skipped ? "skipped" : "ingested" }));
