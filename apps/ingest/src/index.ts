@@ -13,7 +13,7 @@
  *
  * Ciclo:
  *   1. Carrega env.
- *   2. Sobe o servidor HTTP do webhook em WA_WEBHOOK_PORT (loopback).
+ *   2. Sobe o servidor HTTP do webhook em WA_WEBHOOK_HOST:WA_WEBHOOK_PORT.
  *   3. Cada POST: verifica HMAC → whitelist de grupo → heurística →
  *      dedupe → parser → insert.
  *   4. Heartbeat UPSERT a cada 30s em worker_heartbeat.
@@ -23,6 +23,8 @@ import { ENV } from "./env";
 import { logger } from "./logger";
 import { setWorkerStatus, startHeartbeat, stopHeartbeat } from "./heartbeat";
 import { createWebhookServer } from "./webhook/server";
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 const server = createWebhookServer();
 let shuttingDown = false;
@@ -47,12 +49,26 @@ server.on("error", (err) => {
   process.exit(1);
 });
 
+/**
+ * O worker escuta numa interface alcançável de fora do host (o container
+ * do gateway), então a assinatura é a única coisa entre a porta e o
+ * banco. Segredo vazio só é aceitável em bind de loopback (teste local).
+ */
+if (!ENV.webhookSecret && !LOOPBACK_HOSTS.has(ENV.webhookHost)) {
+  logger.error(
+    { host: ENV.webhookHost },
+    "WA_WEBHOOK_SECRET vazio com bind não-loopback — refuso subir sem verificação de assinatura",
+  );
+  process.exit(1);
+}
+
 startHeartbeat();
-server.listen(ENV.webhookPort, "127.0.0.1", () => {
+server.listen(ENV.webhookPort, ENV.webhookHost, () => {
   setWorkerStatus("open", { transport: "whatsmeow-webhook" });
   logger.info(
     {
       workerId: ENV.workerId,
+      host: ENV.webhookHost,
       port: ENV.webhookPort,
       allowedChats: ENV.allowedChats,
       signatureCheck: ENV.webhookSecret ? "on" : "off",

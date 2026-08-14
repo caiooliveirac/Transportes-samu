@@ -48,8 +48,19 @@ function parseList(value: string | undefined): string[] {
 export const ENV = {
   /** ID único do worker (uma linha em worker_heartbeat). */
   workerId: optional("WORKER_ID", "local-dev"),
-  /** Porta local do webhook que o gateway whatsmeow chama. Só loopback. */
+  /** Porta do webhook que o gateway whatsmeow chama. */
   webhookPort: Number(optional("WA_WEBHOOK_PORT", "3082")),
+  /**
+   * Interface de bind. Precisa ser alcançável pelo CONTAINER do gateway,
+   * que chega por `host.docker.internal` → host-gateway (172.17.0.1) —
+   * não pelo loopback. Bind em 127.0.0.1 faz todo POST do gateway dar
+   * timeout, que é como isto nasceu quebrado. Mesmo motivo pelo qual o
+   * giro-wa-adapter escuta em 0.0.0.0.
+   *
+   * Não é exposição pública: o ufw do host tem INPUT DROP e libera só
+   * SSH/80/443. A defesa da porta é o HMAC (ver webhookSecret).
+   */
+  webhookHost: optional("WA_WEBHOOK_HOST", "0.0.0.0"),
   /**
    * Segredo do HMAC `X-Hub-Signature-256`. Precisa bater com
    * `--webhook-secret` do container `whatsmeow-gw` (default upstream:
