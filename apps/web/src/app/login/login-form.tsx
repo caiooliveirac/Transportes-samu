@@ -3,15 +3,20 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { resolvePostLoginTarget } from "@/lib/auth/post-login-target";
+
 type Mode = "unit" | "user";
 
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/solicitar";
+  // Sem `?next=` não há destino pedido — o default sai do kind da sessão,
+  // depois do login, em resolvePostLoginTarget. Assumir "/solicitar" aqui
+  // é o que travava o botão para regulador e admin.
+  const explicitNext = params.get("next");
 
   const [mode, setMode] = useState<Mode>(
-    next.startsWith("/admin") || next === "/" ? "user" : "unit",
+    explicitNext?.startsWith("/admin") || explicitNext === "/" ? "user" : "unit",
   );
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -44,13 +49,13 @@ export function LoginForm() {
         return;
       }
       const data = await r.json();
-      const target =
-        next && next !== "/"
-          ? next
-          : data.kind === "user"
-            ? "/"
-            : "/solicitar";
-      router.push(target);
+      router.push(
+        resolvePostLoginTarget({
+          explicitNext,
+          kind: data.kind,
+          role: data.role,
+        }),
+      );
       router.refresh();
     } catch {
       setError("Erro de rede.");
