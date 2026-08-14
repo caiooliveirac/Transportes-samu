@@ -35,19 +35,29 @@ export interface IngestInput {
   rawText: string;
   rawJson: unknown;
   receivedAt: Date;
+  /**
+   * `false` grava a mensagem em whatsapp_messages e para ali — sem
+   * parser, sem transport. É como o corpus de treinamento é formado: a
+   * mensagem que a heurística REJEITOU é justamente a que ensina onde a
+   * heurística erra, e antes disso ela era descartada sem deixar rastro.
+   */
+  createTransport: boolean;
 }
 
 export interface IngestResult {
-  /** True = um novo transport foi criado. False = mensagem já existia (idempotente). */
+  /** True = um novo transport foi criado. */
   created: boolean;
+  /** True = esta chamada inseriu a linha em whatsapp_messages. */
+  stored: boolean;
   whatsappMessageDbId: number;
   transportId?: string;
   globalConfidence: number;
 }
 
 /**
- * Pipeline atômico: insert whatsapp_messages (idempotente) → parser →
- * insert transport_request linkado. Retorna o estado pra logging.
+ * Pipeline: insert whatsapp_messages (idempotente) e, quando
+ * `createTransport`, parser → insert transport_request linkado.
+ * Retorna o estado pra logging.
  *
  * Idempotência:
  *  - whatsapp_messages tem UNIQUE(wa_message_id); ON CONFLICT DO NOTHING
@@ -100,6 +110,17 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
     baseLog.debug("whatsapp_message already known, skipping transport create");
     return {
       created: false,
+      stored: false,
+      whatsappMessageDbId,
+      globalConfidence: 0,
+    };
+  }
+
+  if (!input.createTransport) {
+    baseLog.debug("message stored for corpus only (filtro não passou)");
+    return {
+      created: false,
+      stored: true,
       whatsappMessageDbId,
       globalConfidence: 0,
     };
@@ -129,6 +150,7 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
     );
     return {
       created: false,
+      stored: true,
       whatsappMessageDbId,
       globalConfidence: parsed.globalConfidence,
     };
@@ -171,6 +193,7 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
 
   return {
     created: true,
+    stored: true,
     whatsappMessageDbId,
     transportId: transport.id,
     globalConfidence: parsed.globalConfidence,

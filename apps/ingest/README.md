@@ -73,6 +73,26 @@ apareceria no log. `received` conta só eventos de mensagem; `rejected`
 soma corpo grande, JSON inválido e assinatura errada. Os contadores
 zeram a cada restart.
 
+## Corpus: toda mensagem do grupo é gravada
+
+O worker grava em `whatsapp_messages` **toda** mensagem do grupo vigiado,
+inclusive a que a heurística de `pipeline/filter.ts` rejeitou. O transporte
+só é criado quando o filtro passa; o veredito
+(`{pass, reason, hits}`) fica em `raw_json.filterVerdict`.
+
+O motivo é direto: a mensagem que o filtro barrou é justamente a que mostra
+onde o filtro erra. Descartando-a, não há material para ajustar filtro nem
+parser — só a suspeita de que algo não entrou.
+
+```bash
+pnpm ingest:corpus                    # últimas 30, com veredito e confiança
+pnpm ingest:corpus 100 --rejeitadas   # só o que o filtro barrou
+pnpm ingest:corpus 100 --texto        # texto inteiro, sem truncar
+```
+
+Isso imprime texto clínico real (nome, CNS, CPF). Terminal seu — não colar
+a saída em issue, chat ou documento.
+
 ## Env
 
 | Variável | Default | Para quê |
@@ -82,7 +102,7 @@ zeram a cada restart.
 | `WA_WEBHOOK_PORT` | `3082` | porta do webhook |
 | `WA_WEBHOOK_HOST` | `0.0.0.0` | interface de bind; `127.0.0.1` não é alcançável pelo container |
 | `WA_WEBHOOK_SECRET` | `secret` | HMAC; vazio desliga a checagem — o worker recusa subir se o bind não for loopback |
-| `WA_ALLOWED_CHATS` | vazio | JIDs separados por vírgula; vazio = todo `@g.us` |
+| `WA_ALLOWED_CHATS` | vazio | JIDs separados por vírgula; vazio = todo `@g.us`. Define o que entra no corpus |
 | `DRY_RUN` | `false` | parseia e loga, não escreve transporte |
 | `LOG_LEVEL` | `info` | |
 
