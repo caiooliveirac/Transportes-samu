@@ -1,0 +1,15 @@
+{
+  "receivedAt": "2026-08-14T17:30:00Z",
+  "expect": {
+    "patientName": { "equals": "PEDRO TESTE DA SILVA" },
+    "patientAgeYears": { "equals": 2 },
+    "originUnitCode": { "equals": "pa_tancredo_neves", "minConfidence": 0.8 },
+    "destination": { "includes": "MUNICIPAL DE SALVADOR" },
+    "procedure": { "includes": "INTERNAMENTO" },
+    "tripType": { "equals": "one_way" },
+    "deadlineLocal": "14:30",
+    "diagnosesIncludes": ["PNEUMONIA BACTERIANA"],
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.85
+  }
+}

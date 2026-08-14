@@ -1,0 +1,16 @@
+{
+  "receivedAt": "2026-08-14T17:30:00Z",
+  "expect": {
+    "patientName": { "equals": "CARLA TESTE FERREIRA" },
+    "patientAgeYears": { "equals": 30 },
+    "originUnitCode": { "equals": "upa_bairro_da_paz", "minConfidence": 0.8 },
+    "destination": { "includes": "METROPOLITANO" },
+    "procedure": { "includes": "INTERNAMENTO" },
+    "tripType": { "equals": "one_way" },
+    "deadlineLocal": "14:30",
+    "vitals": { "spo2": 98, "glasgow": 15 },
+    "diagnosesIncludes": ["PIELONEFRITE"],
+    "suggestedStatus": "novo",
+    "minGlobalConfidence": 0.85
+  }
+}

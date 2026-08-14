@@ -59,6 +59,17 @@ export function extractDeadline(seg: Segmented, receivedAt: Date): Extracted<Dat
 
   const m = tt.value.match(TIME_PATTERN);
   if (!m) {
+    // "IMEDIATO" / "IMEDIATA" é o prazo que o grupo mais escreve, e é um
+    // prazo de verdade: significa agora. Tratar como ausente jogava o caso
+    // no painel sem hora nenhuma, que é pior que assumir o óbvio.
+    if (URGENT_RE.test(tt.value)) {
+      return {
+        value: new Date(receivedAt),
+        confidence: 0.8,
+        raw: tt.value,
+        warning: "prazo imediato — assumido o horário da mensagem",
+      };
+    }
     return {
       value: null,
       confidence: 0.3,

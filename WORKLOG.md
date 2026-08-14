@@ -63,6 +63,38 @@ o parser acertava e nada era gravado.
 - `pnpm ingest:backfill` recupera mensagem aprovada que ficou sem
   transporte. Simulação por padrão, `--aplicar` grava. Só age sobre
   `filterVerdict.pass === true`: barrada é corpus, não caso
+- **backfill aplicado em 14/08 17:47**: as 11 solicitações do dia viraram
+  transporte (1 `novo` com conf 0,86; 10 `pendente_revisao`, conf 0,40 a
+  0,72). Nova rodada devolve "nada a recuperar". Duas mensagens de
+  cancelamento circularam no grupo no mesmo dia (12:29 Alfredo Bureau e
+  17:25 "cancelar OC 0534") — o parser não age sobre caso existente, então
+  esses precisam ser cancelados na UI pelo regulador
+
+**Os quatro templates do grupo.** Com os 11 casos na tabela deu para ver o
+que o parser não entendia — e não era limiar: cada unidade tem seu
+template, todos estáveis.
+
+- rótulo sinônimo resolvido em `segment.ts` (`UNIDADE DE DESTINO` →
+  `destino`, `DATA/HORÁRIO DA APRESENTAÇÃO` → `horario`, `RECURSO
+  SOLICITADO` → `procedimento`), não em cada extractor
+- **dois rótulos na mesma linha** (`DATA: 14/08/2026 HORÁRIO: IMEDIATO`)
+  agora viram dois pares. Antes o segundo sumia e o valor do primeiro era
+  a linha inteira — daí `2026  HORÁRIO` virar "hora 26" e o prazo cair
+  como `invalid time`
+- `DESTINATION_ACRONYMS` em `packages/shared`: `HSA` vira
+  `HSA — Hospital Santo Antônio`. `HM`/`HG`/`HE` servem a mais de um
+  hospital e ficam como estão, com aviso — chutar poria o paciente no
+  lugar errado
+- `IMEDIATO`/`IMEDIATA` passa a ser prazo = horário da mensagem (era o
+  prazo de 10 dos 11 casos, e virava nada)
+- procedimento em checkbox `( X ) INTERNAMENTO` e no formato
+  `SUSPEITA // PROCEDIMENTO`; `NOME FULANO` sem dois-pontos; suspeita
+  diagnóstica finalmente extraída (`SD:`, `SUSPEITA DIAGNÓSTICA:` e lista
+  nas linhas abaixo)
+- 4 fixtures novos, um por template, anonimizados. 56 testes no parser
+- `ingest:backfill --reparse` re-roda o parser sobre caso já criado. Não
+  mexe em status que o regulador moveu; só promove `pendente_revisao` →
+  `novo`
 
 Nota de segurança: ao inspecionar `/proc/<pid>/environ` o
 `WA_WEBHOOK_SECRET` apareceu em terminal. Rotacionar no gateway e no

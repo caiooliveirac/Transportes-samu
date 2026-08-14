@@ -1,14 +1,22 @@
 /**
- * Cria os transportes das mensagens que o filtro APROVOU mas que ficaram
- * sem transporte no banco.
+ * Recupera o que o pipeline deixou para trás:
  *
- * Existe porque o worker rodou em produção com `DRY_RUN=true` herdado do
- * `.env` da raiz: parseava, logava e não gravava. As solicitações do dia
- * ficaram só em `whatsapp_messages`.
+ *  - sem `--reparse`: cria transporte para mensagem APROVADA pelo filtro
+ *    que ficou sem um (o worker rodou em produção com `DRY_RUN=true`
+ *    herdado do `.env` da raiz — parseava, logava e não gravava)
+ *  - com `--reparse`: re-roda o parser sobre mensagem que JÁ tem
+ *    transporte e atualiza os campos. É como um caso parseado por uma
+ *    versão pior do parser se corrige, sem duplicar nada
  *
- *   pnpm ingest:backfill              # só mostra o que faria (padrão)
- *   pnpm ingest:backfill --aplicar    # cria os transportes
- *   pnpm ingest:backfill 50 --aplicar # limita às 50 mais recentes
+ *   pnpm ingest:backfill                     # simulação da criação
+ *   pnpm ingest:backfill --aplicar           # cria os transportes
+ *   pnpm ingest:backfill --reparse           # simulação do re-parse
+ *   pnpm ingest:backfill --reparse --aplicar # atualiza os existentes
+ *   pnpm ingest:backfill 50 --aplicar        # limita às 50 mais recentes
+ *
+ * O re-parse não mexe em status de caso que o regulador já moveu; o único
+ * avanço é `pendente_revisao` → `novo` quando o parser preencheu o que
+ * faltava.
  *
  * Respeita DRY_RUN do ambiente: com DRY_RUN=true nada é escrito mesmo com
  * --aplicar (o próprio `createTransportFromMessage` recusa).
@@ -16,14 +24,18 @@
  * ATENÇÃO: imprime nome de paciente. Rode em terminal seu.
  */
 import "../env";
-import { desc, isNull, sql } from "drizzle-orm";
+import { desc, isNotNull, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@samu-cru/db";
 
-import { createTransportFromMessage } from "../pipeline/ingest";
+import {
+  createTransportFromMessage,
+  reparseTransportFromMessage,
+} from "../pipeline/ingest";
 
 const args = process.argv.slice(2);
 const limit = Number(args.find((a) => /^\d+$/.test(a)) ?? 200);
 const apply = args.includes("--aplicar");
+const reparse = args.includes("--reparse");
 
 interface Verdict {
   pass?: boolean;
@@ -42,7 +54,11 @@ async function main(): Promise<void> {
       schema.transportRequests,
       sql`${schema.transportRequests.whatsappMessageId} = ${schema.whatsappMessages.id}`,
     )
-    .where(isNull(schema.transportRequests.id))
+    .where(
+      reparse
+        ? isNotNull(schema.transportRequests.id)
+        : isNull(schema.transportRequests.id),
+    )
     .orderBy(desc(schema.whatsappMessages.receivedAt))
     .limit(limit);
 
@@ -53,13 +69,18 @@ async function main(): Promise<void> {
   );
 
   if (candidatas.length === 0) {
-    console.log("nada a recuperar — toda mensagem aprovada já tem transporte");
+    console.log(
+      reparse
+        ? "nenhum transporte para re-parsear"
+        : "nada a recuperar — toda mensagem aprovada já tem transporte",
+    );
     return;
   }
 
+  const acao = reparse ? "re-parsear" : "criar";
   console.log(
-    `${candidatas.length} mensagem(ns) aprovada(s) sem transporte` +
-      (apply ? " — criando" : " — simulação (use --aplicar para criar)"),
+    `${candidatas.length} mensagem(ns) a ${acao}` +
+      (apply ? " — aplicando" : ` — simulação (use --aplicar para ${acao})`),
   );
 
   for (const r of candidatas.slice().reverse()) {
@@ -68,6 +89,19 @@ async function main(): Promise<void> {
 
     if (!apply) {
       console.log(`\n── #${r.id} · ${quando}\n${resumo}`);
+      continue;
+    }
+
+    if (reparse) {
+      const res = await reparseTransportFromMessage({
+        whatsappMessageDbId: r.id,
+        rawText: r.rawText,
+        receivedAt: r.receivedAt,
+      });
+      console.log(
+        `\n── #${r.id} · ${quando} · ${res.updated} atualizado(s)` +
+          ` · conf=${res.globalConfidence}${res.promoted ? " · promovido a novo" : ""}\n${resumo}`,
+      );
       continue;
     }
 

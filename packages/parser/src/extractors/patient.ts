@@ -31,6 +31,17 @@ export function extractName(seg: Segmented): Extracted<string> {
       return { value: name, confidence: 0.95, raw: val };
     }
   }
+  // "NOME THEO BRYAN DA SILVA" — label sem dois-pontos, comum quando o
+  // template foi digitado à mão.
+  for (const line of seg.lines) {
+    const m = line.match(
+      /^(?:nome(?:\s+completo)?|paciente|pcte)\s+([A-Za-zÀ-ſ][A-Za-zÀ-ſ' ]{4,80})$/i,
+    );
+    if (m) {
+      const name = m[1]!.replace(/\s{2,}/g, " ").trim();
+      if (name.length >= 5) return { value: name, confidence: 0.8, raw: line };
+    }
+  }
   // Fallback em linha livre: "pcte NAME 36a" ou "paciente NAME, 47a"
   for (const line of seg.lines) {
     const m = line.match(
