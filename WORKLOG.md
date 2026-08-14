@@ -36,22 +36,34 @@ que impedia o PM2 de subir — `EADDRINUSE` em loop, 25 restarts.
   regra equivalente; sem ela o POST do gateway morre em
   `context deadline exceeded`
 
-**Estado da ingestão:** caminho provado ponta a ponta menos o tráfego —
-`docker exec whatsmeow-gw wget -O- http://host.docker.internal:3082/`
-responde 200. Falta uma mensagem real no grupo UT APOIO para ver
-`received`/`ingested` subirem (a validação rodou às 05h, grupo quieto; o
-gateway não emitiu evento nenhum em 12min). Checagem:
+**Estado da ingestão:** fan-out provado em produção com timestamp casando
+dos dois lados — `Forwarding message.ack to 2 configured webhook(s)` no log
+do gateway e `lastWebhookAt` correspondente no worker. Falta só uma mensagem
+de TEXTO no grupo UT APOIO para virar linha em `whatsapp_messages`
+(`message.ack` é ruído e responde 204 sem contar). Checagem:
 
 ```bash
 ssh magalu 'curl -s http://127.0.0.1:3082/ | jq'
+ssh magalu 'cd /home/ubuntu/Transportes-samu && set -a && source .env.production && set +a && pnpm ingest:corpus 30'
 ```
 
-`lastWebhookAt` diferente de `null` prova que o gateway está entregando.
+**Dados falsos apagados** (2026-08-14, autorizado pelo usuário): 21
+`transport_requests` + 5 `transport_events` + 17 `transport_delays`. Todos
+eram mock — `whatsapp_message_id IS NULL` nos 21, nada tinha vindo do
+WhatsApp. `units`, `users` e `unit_credentials` intactos. Backup em
+`~/backups-adhoc/transportes-pre-limpeza-mock-20260814-052158.sql.gz`.
 
-**Pendência conhecida:** o banco de produção é `transportes` e ainda tem os
-dados de seed mock. Quando as solicitações reais começarem a entrar, decidir
-se limpa o mock (`transport_requests` + `whatsapp_messages`) ou deixa
-conviver.
+**Corpus de treinamento:** o worker passou a gravar TODA mensagem do grupo
+vigiado, inclusive a que o filtro rejeita (veredito em
+`raw_json.filterVerdict`), porque é a mensagem barrada que mostra onde o
+filtro erra. `pnpm ingest:corpus` lê com veredito e confiança lado a lado.
+Material para decidir o ajuste de filtro/parser — a discussão ainda não
+aconteceu.
+
+**Login:** a sessão que existia desde julho era do processo órfão; ao matá-lo,
+todo cookie caiu. As contas estão intactas (hash scrypt de 15/07, nenhuma
+tocada). Só `caio.oliveira` foi rotacionada, para reentrar como admin — as
+outras se rotacionam pela UI de `/admin`.
 
 ## Fase 10 — ingestão via gateway whatsmeow
 
