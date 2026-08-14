@@ -8,7 +8,8 @@
     "start": "tsx src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "corpus": "tsx src/scripts/corpus.ts"
   },
   "dependencies": {
     "@samu-cru/db": "workspace:*",

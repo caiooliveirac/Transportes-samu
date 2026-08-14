@@ -25,7 +25,11 @@ const MAX_BODY_BYTES = 1_000_000;
 const stats = {
   /** Eventos de mensagem (o ruído do gateway não entra). */
   received: 0,
+  /** Linhas novas em whatsapp_messages — inclui o que o filtro rejeitou. */
+  stored: 0,
+  /** Transportes criados (subconjunto de `stored`). */
   ingested: 0,
+  /** Nem chegou a ser gravado: fromMe, chat fora da whitelist, sem texto, repetido. */
   skipped: 0,
   /** Corpo grande, JSON inválido ou assinatura errada. */
   rejected: 0,
@@ -40,43 +44,73 @@ const stats = {
  * resposta não é 2xx. Como `wa_message_id` é UNIQUE e o insert usa
  * ON CONFLICT DO NOTHING, repetir é inofensivo.
  */
-export async function handleEvent(msg: NormalizedMessage): Promise<string | null> {
-  if (msg.fromMe) return "from_me";
-  if (!isFromAllowedChat(msg.chatId)) return "chat_not_allowed";
-  if (!msg.text) return "no_text";
+export interface EventOutcome {
+  /** Gravou linha nova em whatsapp_messages. */
+  stored: boolean;
+  /** Criou transport_request. */
+  transport: boolean;
+  /** Motivo, quando não virou transporte. Null = virou. */
+  reason: string | null;
+}
+
+const NOT_STORED = (reason: string): EventOutcome => ({
+  stored: false,
+  transport: false,
+  reason,
+});
+
+export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome> {
+  if (msg.fromMe) return NOT_STORED("from_me");
+  if (!isFromAllowedChat(msg.chatId)) return NOT_STORED("chat_not_allowed");
+  if (!msg.text) return NOT_STORED("no_text");
 
   if (msg.event === EVENT_MESSAGE_EDITED) {
     await handleMessageEdit(msg.targetMessageId, msg.text, msg.receivedAt);
-    return null;
+    return { stored: false, transport: false, reason: null };
   }
 
-  if (wasSeen(msg.messageId)) return "already_seen";
+  if (wasSeen(msg.messageId)) return NOT_STORED("already_seen");
   markSeen(msg.messageId);
 
+  // TODA mensagem do grupo vigiado é gravada, inclusive a que a heurística
+  // rejeita: é ela que mostra onde a heurística erra, e sem isso a decisão
+  // de ajustar o filtro/parser não tem material. O veredito vai no rawJson
+  // (jsonb, sem migration) para dar pra comparar depois o que o filtro
+  // achou com o que a mensagem era.
   const verdict = looksLikeTransport(msg.text);
-  if (!verdict.pass) return `filtered: ${verdict.reason}`;
 
-  logger.info(
-    {
-      waMessageId: msg.messageId,
-      remoteJid: msg.chatId,
-      hints: verdict.hits,
-      textLen: msg.text.length,
-    },
-    "transport candidate received",
-  );
+  if (verdict.pass) {
+    logger.info(
+      {
+        waMessageId: msg.messageId,
+        remoteJid: msg.chatId,
+        hints: verdict.hits,
+        textLen: msg.text.length,
+      },
+      "transport candidate received",
+    );
+  }
 
-  await ingestMessage({
+  const result = await ingestMessage({
     waMessageId: msg.messageId,
     waChatId: msg.chatId,
     waSenderId: msg.senderId,
     rawText: msg.text,
-    rawJson: ENV.dryRun
-      ? null
-      : { senderName: msg.senderName, event: msg.event, source: "whatsmeow-gw" },
+    rawJson: {
+      senderName: msg.senderName,
+      event: msg.event,
+      source: "whatsmeow-gw",
+      filterVerdict: verdict,
+    },
     receivedAt: msg.receivedAt,
+    createTransport: verdict.pass,
   });
-  return null;
+
+  return {
+    stored: result?.stored ?? false,
+    transport: result?.created ?? false,
+    reason: verdict.pass ? null : verdict.reason,
+  };
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
@@ -162,18 +196,34 @@ export function createWebhookServer(): http.Server {
       stats.received += 1;
 
       try {
-        const skipped = await handleEvent(msg);
-        if (skipped) {
-          stats.skipped += 1;
+        const outcome = await handleEvent(msg);
+        if (outcome.stored) stats.stored += 1;
+        if (outcome.transport) stats.ingested += 1;
+        if (!outcome.stored && !outcome.transport) stats.skipped += 1;
+        if (outcome.reason) {
           logger.debug(
-            { waMessageId: msg.messageId, remoteJid: msg.chatId, skipped },
-            "webhook event skipped",
+            {
+              waMessageId: msg.messageId,
+              remoteJid: msg.chatId,
+              reason: outcome.reason,
+              stored: outcome.stored,
+            },
+            outcome.stored
+              ? "message stored for corpus, not a transport"
+              : "webhook event skipped",
           );
-        } else {
-          stats.ingested += 1;
         }
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: skipped ? "skipped" : "ingested" }));
+        res.end(
+          JSON.stringify({
+            status: outcome.transport
+              ? "ingested"
+              : outcome.stored
+                ? "stored"
+                : "skipped",
+            reason: outcome.reason,
+          }),
+        );
       } catch (err) {
         logger.error({ err, waMessageId: msg.messageId }, "ingest failed");
         res.writeHead(500).end();
