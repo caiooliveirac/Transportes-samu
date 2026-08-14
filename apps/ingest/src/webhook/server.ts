@@ -31,6 +31,12 @@ const stats = {
   ingested: 0,
   /** Nem chegou a ser gravado: fromMe, chat fora da whitelist, sem texto, repetido. */
   skipped: 0,
+  /**
+   * Subconjunto de `skipped`: mensagem do grupo vigiado que veio só com
+   * mídia. Separado porque distingue "grupo quieto" de "grupo que manda
+   * tudo por print" sem precisar ler log.
+   */
+  mediaOnly: 0,
   /** Corpo grande, JSON inválido ou assinatura errada. */
   rejected: 0,
   lastWebhookAt: null as string | null,
@@ -62,7 +68,19 @@ const NOT_STORED = (reason: string): EventOutcome => ({
 export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome> {
   if (msg.fromMe) return NOT_STORED("from_me");
   if (!isFromAllowedChat(msg.chatId)) return NOT_STORED("chat_not_allowed");
-  if (!msg.text) return NOT_STORED("no_text");
+  if (!msg.text) {
+    // Só para o grupo vigiado, e em info: é a resposta para "o grupo usa
+    // texto ou manda print?". Nada do conteúdo da mídia é logado.
+    logger.info(
+      {
+        waMessageId: msg.messageId,
+        remoteJid: msg.chatId,
+        mediaKind: msg.mediaKind ?? "nenhuma",
+      },
+      "mensagem sem texto no grupo vigiado — nada a parsear",
+    );
+    return NOT_STORED(msg.mediaKind ? `media_only:${msg.mediaKind}` : "no_text");
+  }
 
   if (msg.event === EVENT_MESSAGE_EDITED) {
     await handleMessageEdit(msg.targetMessageId, msg.text, msg.receivedAt);
@@ -200,6 +218,7 @@ export function createWebhookServer(): http.Server {
         if (outcome.stored) stats.stored += 1;
         if (outcome.transport) stats.ingested += 1;
         if (!outcome.stored && !outcome.transport) stats.skipped += 1;
+        if (outcome.reason?.startsWith("media_only:")) stats.mediaOnly += 1;
         if (outcome.reason) {
           logger.debug(
             {

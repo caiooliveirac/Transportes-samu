@@ -32,8 +32,33 @@ export interface NormalizedMessage {
   senderId: string | null;
   senderName: string | null;
   text: string | null;
+  /**
+   * Que tipo de mídia veio, quando veio. Mensagem sem texto some do
+   * pipeline (não há o que parsear), e sem isto não dá para distinguir
+   * "grupo quieto" de "grupo que manda tudo por print" — que são
+   * diagnósticos opostos e levam a decisões opostas.
+   */
+  mediaKind: string | null;
   receivedAt: Date;
   fromMe: boolean;
+}
+
+/** Chaves de mídia do payload do gateway (event_message.go). */
+const MEDIA_KEYS = [
+  "image",
+  "video",
+  "video_note",
+  "audio",
+  "document",
+  "sticker",
+  "contact",
+  "location",
+  "interactive_media",
+] as const;
+
+function detectMediaKind(p: Record<string, unknown>): string | null {
+  const found = MEDIA_KEYS.filter((k) => p[k] !== undefined && p[k] !== null);
+  return found.length > 0 ? found.join("+") : null;
 }
 
 function str(value: unknown): string | null {
@@ -70,6 +95,7 @@ export function normalizeWebhook(raw: unknown): NormalizedMessage | null {
     senderId: str(p.from),
     senderName: str(p.from_name),
     text: str(p.body),
+    mediaKind: detectMediaKind(p),
     receivedAt:
       parsedTs && !Number.isNaN(parsedTs.getTime()) ? parsedTs : new Date(),
     fromMe: p.is_from_me === true,
