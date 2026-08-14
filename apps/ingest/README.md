@@ -59,7 +59,19 @@ O worker responde 2xx **depois** de ingerir. Erro vira 500 de propósito:
 o gateway reenvia até 5x com backoff, e `wa_message_id` é UNIQUE, então
 repetir é inofensivo.
 
-`GET /` é health check: `{"status":"ok","worker":"<WORKER_ID>"}`.
+`GET /` é health check e contador:
+
+```json
+{"status":"ok","worker":"magalu-prod-1","received":12,"ingested":3,
+ "skipped":9,"rejected":0,"lastWebhookAt":"2026-08-14T07:31:02.114Z"}
+```
+
+`lastWebhookAt` avança em **qualquer** POST autenticado (inclusive ack e
+presença), então é ela que responde "o gateway ainda está mandando pra
+cá?" — com `LOG_LEVEL=info` um worker que recebe e filtra tudo não
+apareceria no log. `received` conta só eventos de mensagem; `rejected`
+soma corpo grande, JSON inválido e assinatura errada. Os contadores
+zeram a cada restart.
 
 ## Env
 

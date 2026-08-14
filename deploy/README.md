@@ -192,8 +192,11 @@ volume força novo pareamento e derruba os **dois** consumidores.
 ## Troubleshooting
 
 **Worker "closed" no WorkerBadge, ou nenhum transporte novo entrando:**
-1. O worker está de pé? `curl -s http://127.0.0.1:3082/` deve responder
-   `{"status":"ok",...}`. Se não, `pm2 logs transportes-ingest`.
+1. O worker está de pé e o gateway está falando com ele?
+   `curl -s http://127.0.0.1:3082/ | jq` — `lastWebhookAt` recente prova
+   que os POSTs chegam; `received`/`ingested`/`skipped` dizem o que
+   aconteceu com eles. `lastWebhookAt: null` = nada chegou desde o último
+   restart, pule para o passo 2. Sem resposta = `pm2 logs transportes-ingest`.
 2. O gateway ainda lista este destino?
    `docker inspect whatsmeow-gw --format '{{json .Config.Env}}' | grep WEBHOOK`
    — um `docker run` de manutenção pode ter recriado o container só com
