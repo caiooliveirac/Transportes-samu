@@ -3,11 +3,57 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-08-14 · Ingestão real via gateway whatsmeow (fim do Baileys)
+**Última atualização:** 2026-08-14 · No ar no magalu (PM2) + ingestão real via gateway whatsmeow
 
 ---
 
 ## Resume here
+
+**Produção no magalu, de verdade.** Antes disso a app respondia em
+`transportes.mnrs.com.br` por um **processo órfão**: um `next start --port
+3020` solto desde 28/07, sem PM2, sem commit conhecido
+(`/api/health` devolvia `runtime: dev`, `commit: unknown`). Era ele também
+que impedia o PM2 de subir — `EADDRINUSE` em loop, 25 restarts.
+
+- órfão morto; `transportes-web` e `transportes-ingest` sob PM2, `pm2 save`
+  feito, `pm2-ubuntu` já enabled (sobrevive a reboot)
+- health público agora casa com o commit publicado e diz `runtime: pm2`
+- constantes de deploy corrigidas: `APP_DIR` era `/home/ubuntu/transportes-samu`
+  (o checkout é `Transportes-samu`) e a porta era 3008 (o mapa central do
+  nginx roteia **3020**). Com os valores antigos nada subiria
+- runner self-hosted `transportes-ec2` estava offline desde a morte da EC2,
+  travando todo CI. Registrado `magalu-transportes` no magalu (mesmo padrão
+  de escala/nep/simulador) e removido o antigo. Push em main volta a
+  deployar sozinho
+- nginx: `location /api/stream` no mapa central com `proxy_buffering off` e
+  `proxy_read_timeout 24h`. O `location /` tem 120s, que cortaria o SSE do
+  dashboard a cada 2min. Backup em `~/nginx-backups/`, `nginx -t` ok,
+  plantoes e escala revalidados em 200
+- gateway `whatsmeow-gw` recriado com os DOIS webhooks
+  (`:3081` giro, `:3082` transportes) + `WHATSAPP_WEBHOOK_SECRET`. Sessão
+  preservada no volume, sem re-pareamento
+- `ufw allow in on docker0 to any port 3082` — o `3081` do Giro já tinha a
+  regra equivalente; sem ela o POST do gateway morre em
+  `context deadline exceeded`
+
+**Estado da ingestão:** caminho provado ponta a ponta menos o tráfego —
+`docker exec whatsmeow-gw wget -O- http://host.docker.internal:3082/`
+responde 200. Falta uma mensagem real no grupo UT APOIO para ver
+`received`/`ingested` subirem (a validação rodou às 05h, grupo quieto; o
+gateway não emitiu evento nenhum em 12min). Checagem:
+
+```bash
+ssh magalu 'curl -s http://127.0.0.1:3082/ | jq'
+```
+
+`lastWebhookAt` diferente de `null` prova que o gateway está entregando.
+
+**Pendência conhecida:** o banco de produção é `transportes` e ainda tem os
+dados de seed mock. Quando as solicitações reais começarem a entrar, decidir
+se limpa o mock (`transport_requests` + `whatsapp_messages`) ou deixa
+conviver.
+
+## Fase 10 — ingestão via gateway whatsmeow
 
 **Ingestão real — worker passa a consumir o gateway whatsmeow compartilhado.**
 
@@ -27,7 +73,7 @@ o magalu já roda `whatsmeow-gw` (`go-whatsapp-web-multidevice`,
   (`{event, device_id, payload}`) e verifica o HMAC
   `X-Hub-Signature-256`. Contrato conferido no fonte upstream
   (`event_message.go`), não adivinhado
-- `apps/ingest/src/webhook/server.ts` — servidor HTTP loopback; reusa
+- `apps/ingest/src/webhook/server.ts` — servidor HTTP; reusa
   `pipeline/filter` + `pipeline/dedupe` + `pipeline/ingest` intactos.
   Responde 2xx só depois de ingerir (erro = 500 → gateway reenvia 5x;
   `wa_message_id` UNIQUE torna o retry inofensivo)
@@ -42,17 +88,13 @@ o magalu já roda `whatsmeow-gw` (`go-whatsapp-web-multidevice`,
   `pm2 delete transportes-ingest` do `deploy-production.sh` saiu
 - 8 testes em `apps/ingest/__tests__/payload.test.ts`; typecheck e lint ok
 
-**Pendência de operação (não feita — mexe em serviço do Giro):** recriar
-o container `whatsmeow-gw` com
-`WHATSAPP_WEBHOOK=http://host.docker.internal:3081/hook,http://host.docker.internal:3082/hook`.
-A sessão vive no volume, então não há re-pareamento. Enquanto isso não
-for feito, nada chega no :3082. Roteiro em `deploy/README.md`.
-
-**Pendência anterior que continua valendo:** o app ainda não está no ar
-no magalu (`transportes.mnrs.com.br` aponta pra :3020, que não escuta;
-não há processo PM2 `transportes-*`). O checkout existe em
-`/home/ubuntu/Transportes-samu` — note o T maiúsculo, enquanto todo o
-deploy (ecosystem, scripts) assume `/home/ubuntu/transportes-samu`.
+Duas correções vieram depois, achadas em produção:
+- `GET /` do worker ganhou contadores (`received`/`ingested`/`skipped`/
+  `rejected`/`lastWebhookAt`) — em `LOG_LEVEL=info` um worker que recebe e
+  filtra tudo era indistinguível de um que não recebe nada
+- o bind era `127.0.0.1`, inalcançável pelo container do gateway (que chega
+  pelo host-gateway, 172.17.0.1). `WA_WEBHOOK_HOST` default `0.0.0.0`, e o
+  worker recusa subir com bind não-loopback e segredo vazio
 
 ## Fase 9 (anterior)
 
