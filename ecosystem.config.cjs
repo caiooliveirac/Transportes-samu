@@ -16,13 +16,13 @@ module.exports = {
   apps: [
     {
       name: "transportes-web",
-      cwd: "/home/ubuntu/transportes-samu",
-      env_file: "/home/ubuntu/transportes-samu/.env.production",
+      cwd: "/home/ubuntu/Transportes-samu",
+      env_file: "/home/ubuntu/Transportes-samu/.env.production",
       script: "pnpm",
       args: "--filter @samu-cru/web start",
       env: {
         NODE_ENV: "production",
-        PORT: "3008",
+        PORT: "3020",
         RUNTIME_SOURCE_OF_TRUTH: "pm2",
         GIT_COMMIT_SHA: process.env.GIT_COMMIT_SHA || "unknown",
       },
@@ -32,8 +32,8 @@ module.exports = {
     },
     {
       name: "transportes-ingest",
-      cwd: "/home/ubuntu/transportes-samu",
-      env_file: "/home/ubuntu/transportes-samu/.env.production",
+      cwd: "/home/ubuntu/Transportes-samu",
+      env_file: "/home/ubuntu/Transportes-samu/.env.production",
       script: "pnpm",
       args: "--filter @samu-cru/ingest start",
       env: {

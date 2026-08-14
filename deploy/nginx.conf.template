@@ -1,6 +1,10 @@
 # /etc/nginx/sites-available/transportes.mnrs.com.br
 #
-# Reverse proxy para o Next.js do transportes-samu (PM2 :3008).
+# Reverse proxy para o Next.js do transportes-samu (PM2 :3020).
+#
+# NÃO usado no magalu, onde o roteamento é o mapa central
+# /etc/nginx/sites-available/mnrs.conf. Mantido como referência para
+# host novo ou nginx dedicado.
 # SSE-friendly: buffering desligado em /api/stream pra eventos
 # chegarem instantâneo no cliente (PLANNING §9 + nosso PR 8).
 #
@@ -10,7 +14,7 @@
 #   sudo certbot --nginx -d transportes.mnrs.com.br
 
 upstream transportes_upstream {
-  server 127.0.0.1:3008;
+  server 127.0.0.1:3020;
   keepalive 32;
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploy de produção. Pré-condições:
-#   - rodando em /home/ubuntu/transportes-samu como user ubuntu
+#   - rodando em /home/ubuntu/Transportes-samu como user ubuntu
 #   - .env.production existe e contém DATABASE_URL, WA_ALLOWED_CHATS, etc
 #   - pm2, pnpm e Node 22+ instalados no host
 #   - GH Actions runner já checou out a versão a deployar
@@ -9,10 +9,10 @@
 # Em falha de health check, abort sem reload (versão antiga continua de pé).
 set -euo pipefail
 
-APP_DIR="/home/ubuntu/transportes-samu"
+APP_DIR="/home/ubuntu/Transportes-samu"
 WEB_NAME="transportes-web"
 INGEST_NAME="transportes-ingest"
-HEALTH_URL="http://127.0.0.1:3008/api/health"
+HEALTH_URL="http://127.0.0.1:3020/api/health"
 PUBLIC_URL="https://transportes.mnrs.com.br/api/health"
 
 info()  { echo "[deploy][INFO]  $*"; }
