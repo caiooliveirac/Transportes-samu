@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploy de produção. Pré-condições:
-#   - rodando em /home/ubuntu/transportes-samu como user ubuntu
+#   - rodando em /home/ubuntu/Transportes-samu como user ubuntu
 #   - .env.production existe e contém DATABASE_URL, WA_ALLOWED_CHATS, etc
 #   - pm2, pnpm e Node 22+ instalados no host
 #   - GH Actions runner já checou out a versão a deployar
@@ -9,10 +9,10 @@
 # Em falha de health check, abort sem reload (versão antiga continua de pé).
 set -euo pipefail
 
-APP_DIR="/home/ubuntu/transportes-samu"
+APP_DIR="/home/ubuntu/Transportes-samu"
 WEB_NAME="transportes-web"
 INGEST_NAME="transportes-ingest"
-HEALTH_URL="http://127.0.0.1:3008/api/health"
+HEALTH_URL="http://127.0.0.1:3020/api/health"
 PUBLIC_URL="https://transportes.mnrs.com.br/api/health"
 
 info()  { echo "[deploy][INFO]  $*"; }
@@ -62,14 +62,9 @@ info "building all workspaces"
 pnpm build
 
 # ─── Remove dormant ingest process (Baileys desligado) ────────────────────
-# Worker Baileys foi tirado do ecosystem por estar em loop de reconexão
-# competindo sessão WhatsApp com outra app no mesmo EC2. Pode estar
-# carregado no daemon PM2 desde deploys anteriores — tira do ar e do dump.
-if pm2 describe "$INGEST_NAME" >/dev/null 2>&1; then
-  info "deleting dormant $INGEST_NAME"
-  pm2 delete "$INGEST_NAME" || true
-  pm2 save || true
-fi
+# $INGEST_NAME voltou ao ecosystem: não é mais worker Baileys (que
+# competia sessão WhatsApp), e sim receptor de webhook do gateway
+# whatsmeow em 127.0.0.1:3082. O reload abaixo cuida dele junto com a web.
 
 # ─── PM2 reload (or start on first deploy) ────────────────────────────────
 if pm2 describe "$WEB_NAME" >/dev/null 2>&1; then

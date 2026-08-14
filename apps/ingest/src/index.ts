@@ -1,78 +1,63 @@
 /**
- * Worker SAMU/CRU — Baileys → parser → Postgres.
+ * Worker SAMU/CRU — webhook do gateway whatsmeow → parser → Postgres.
  *
- * Cycle:
- *   1. Carrega env, abre socket Baileys.
- *   2. Espera QR (primeira execução) ou pega sessão existente.
- *   3. Registra handlers de connection (QR + reconnect) e mensagens
- *      (whitelist + parser + insert).
+ * Não mantém sessão WhatsApp própria. Quem detém a sessão do número do
+ * chefe de plantão (557197150415) é o container `whatsmeow-gw`
+ * (go-whatsapp-web-multidevice) no magalu, compartilhado com o Giro de
+ * Leitos. Este worker é só mais um destino da lista `--webhook` dele.
+ *
+ * Foi assim que a ingestão voltou: o worker Baileys anterior disputava
+ * slot de Linked Device com o Giro no MESMO número e vivia em loop de
+ * reconexão (ver docs/baileys-isolamento-2026-05-25.md do giro-de-leitos).
+ * Uma sessão, N consumidores, zero disputa.
+ *
+ * Ciclo:
+ *   1. Carrega env.
+ *   2. Sobe o servidor HTTP do webhook em WA_WEBHOOK_PORT (loopback).
+ *   3. Cada POST: verifica HMAC → whitelist de grupo → heurística →
+ *      dedupe → parser → insert.
  *   4. Heartbeat UPSERT a cada 30s em worker_heartbeat.
- *   5. Em close não-loggedOut, agenda reconnect com backoff exponencial
- *      e recria a sessão. Em loggedOut, limpa auth e exige QR novo.
- *
- * Encerra limpo em SIGINT/SIGTERM — fecha heartbeat e socket.
  */
 import "./env";
 import { ENV } from "./env";
 import { logger } from "./logger";
 import { setWorkerStatus, startHeartbeat, stopHeartbeat } from "./heartbeat";
-import { createSession, type BaileysSession } from "./whatsapp/client";
-import { registerConnectionHandlers } from "./whatsapp/connection";
-import { registerMessageHandlers } from "./whatsapp/messages";
+import { createWebhookServer } from "./webhook/server";
 
-let activeSession: BaileysSession | null = null;
+const server = createWebhookServer();
 let shuttingDown = false;
 
-async function bootstrap(): Promise<void> {
-  if (shuttingDown) return;
-  if (activeSession) {
-    logger.debug("session already active, skipping bootstrap");
-    return;
-  }
-
-  logger.info(
-    {
-      workerId: ENV.workerId,
-      sessionDir: ENV.sessionDir,
-      allowedChats: ENV.allowedChats,
-      dryRun: ENV.dryRun,
-    },
-    "starting SAMU/CRU ingest worker",
-  );
-
-  const session = await createSession();
-  activeSession = session;
-
-  registerConnectionHandlers(session.sock, session.auth, {
-    onStatusChange: setWorkerStatus,
-    onReconnectRequest: () => {
-      activeSession = null;
-      void bootstrap();
-    },
-    onLoggedOut: () => {
-      activeSession = null;
-      logger.error(
-        "session logged out — restart the worker after re-scanning QR",
-      );
-    },
-  });
-
-  registerMessageHandlers(session.sock);
-}
-
 function handleShutdown(signal: NodeJS.Signals): void {
-  logger.info({ signal }, "shutdown requested, closing session");
+  if (shuttingDown) return;
   shuttingDown = true;
+  logger.info({ signal }, "shutdown requested, closing webhook server");
+  setWorkerStatus("closed");
   stopHeartbeat();
-  void activeSession?.sock.end(undefined);
-  process.exit(0);
+  server.close(() => process.exit(0));
+  // Conexão pendurada não pode segurar o deploy.
+  setTimeout(() => process.exit(0), 5_000).unref();
 }
 
 process.on("SIGINT", handleShutdown);
 process.on("SIGTERM", handleShutdown);
 
-startHeartbeat();
-bootstrap().catch((err) => {
-  logger.error({ err }, "fatal during bootstrap");
+server.on("error", (err) => {
+  logger.error({ err }, "webhook server error");
+  setWorkerStatus("closed", { error: String(err) });
   process.exit(1);
+});
+
+startHeartbeat();
+server.listen(ENV.webhookPort, "127.0.0.1", () => {
+  setWorkerStatus("open", { transport: "whatsmeow-webhook" });
+  logger.info(
+    {
+      workerId: ENV.workerId,
+      port: ENV.webhookPort,
+      allowedChats: ENV.allowedChats,
+      signatureCheck: ENV.webhookSecret ? "on" : "off",
+      dryRun: ENV.dryRun,
+    },
+    "SAMU/CRU ingest listening for whatsmeow webhooks",
+  );
 });

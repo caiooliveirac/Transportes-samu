@@ -28,7 +28,7 @@ execução; [`PLANNING.md`](./PLANNING.md) é o contrato arquitetural.
 | Estilos | Tailwind v4 (CSS-first via `@theme`) | 4.0 | `apps/web/src/app/globals.css` |
 | UI primitives | shadcn/ui (new-york, baseColor zinc) | latest | `apps/web/src/components/ui` |
 | Ícones / motion | Lucide React, Framer Motion | latest | `apps/web` |
-| Worker | Baileys (Phase 3) | — | `apps/ingest` |
+| Worker | Webhook do gateway whatsmeow (`whatsmeow-gw`) | — | `apps/ingest` |
 | Parser | regex/determinístico puro (Phase 1) | — | `packages/parser` |
 
 ## Workspaces
@@ -36,7 +36,7 @@ execução; [`PLANNING.md`](./PLANNING.md) é o contrato arquitetural.
 | Workspace | Responsabilidade |
 |---|---|
 | `apps/web` | UI Next.js. Painel, modal de detalhes, fila de revisão. |
-| `apps/ingest` | Worker Baileys que consome WhatsApp, chama o parser, insere no DB (Phase 3). |
+| `apps/ingest` | Recebe webhooks do gateway whatsmeow, chama o parser, insere no DB. Não abre sessão WhatsApp própria. |
 | `packages/shared` | Enums, types, status meta, seed de unidades. Fonte única para toda a taxonomia. |
 | `packages/db` | Cliente Drizzle, schema, migrations, queries. |
 | `packages/parser` | Parser determinístico das mensagens (Phase 1). |
@@ -138,10 +138,11 @@ cp .env.example .env.local
 # edite .env.local se necessário
 ```
 
-**Sessão Baileys perdida (Phase 3+):**
-- A pasta `apps/ingest/auth/` é gitignored. Backup criptografado é
-  responsabilidade do operador. Se perder, vai precisar re-escanear o
-  QR no boot do worker.
+**Ingest não recebe mensagem:**
+- O worker não tem sessão WhatsApp própria: ele é um destino da lista
+  `--webhook` do container `whatsmeow-gw`, que detém a sessão do número
+  do chefe de plantão e é compartilhado com o Giro de Leitos. Roteiro de
+  diagnóstico em [`deploy/README.md`](./deploy/README.md#troubleshooting).
 
 ## Para o próximo agente / colaborador
 

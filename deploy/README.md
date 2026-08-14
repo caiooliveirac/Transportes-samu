@@ -1,8 +1,20 @@
 # Deploy — `transportes.mnrs.com.br`
 
-Produção EC2 (mesma instância que serve `plantoes.mnrs.com.br` e
-`checagem.mnrs.com.br`). Padrão: **self-hosted GitHub Actions runner +
-PM2 + nginx + Postgres local**.
+Produção no **magalu** (`ssh magalu`), mesmo host de `plantoes`, `giro`,
+`escala` e do gateway WhatsApp. Padrão: **PM2 + nginx + Postgres nativo**.
+
+- checkout: `/home/ubuntu/Transportes-samu`
+- web: PM2 `transportes-web`, `127.0.0.1:3020`
+- ingest: PM2 `transportes-ingest`, `127.0.0.1:3082` (webhook do gateway)
+- banco: `transportes` (Postgres nativo do host, role `transportes`)
+- nginx: **não** usa `deploy/nginx.conf.template`. O roteamento é o mapa
+  central `/etc/nginx/sites-available/mnrs.conf`
+  (`transportes.mnrs.com.br 3020;`), compartilhado com os outros apps.
+
+> A EC2 que hospedava isso morreu; o runner self-hosted
+> `actions-runner-transportes` **não** existe no magalu. Até alguém
+> registrar um, `.github/workflows/deploy.yml` não roda e o deploy é
+> `ssh magalu 'cd /home/ubuntu/Transportes-samu && bash scripts/deploy-production.sh'`.
 
 ---
 
@@ -10,14 +22,14 @@ PM2 + nginx + Postgres local**.
 
 ```
 push em main
-  → GH Actions runner (rodando na própria EC2) é acionado
+  → GH Actions runner self-hosted no host de produção é acionado
   → job `gate`:   pnpm lint, typecheck, build, test
   → job `deploy`: bash scripts/deploy-production.sh
                   ├── pnpm install --frozen-lockfile
                   ├── pnpm db:migrate
                   ├── pnpm build
                   ├── pm2 reload ecosystem.config.cjs --update-env
-                  ├── curl :3005/api/health → ok=true
+                  ├── curl :3020/api/health → ok=true
                   └── curl https://transportes.mnrs.com.br/api/health → 200
 ```
 
@@ -25,22 +37,24 @@ Se qualquer step falha, deploy aborta sem rolar reload — versão atual continu
 
 ---
 
-## Bootstrap manual (uma vez na EC2)
+## Bootstrap manual (uma vez por host)
 
 ### 1. Postgres
 
+Já existe no magalu: role e banco `transportes`. Em host novo:
+
 ```bash
-sudo -u postgres createuser transportes_samu
-sudo -u postgres createdb -O transportes_samu transportes_samu
-sudo -u postgres psql -c "ALTER USER transportes_samu WITH PASSWORD '<SENHA_FORTE>';"
+sudo -u postgres createuser transportes
+sudo -u postgres createdb -O transportes transportes
+sudo -u postgres psql -c "ALTER USER transportes WITH PASSWORD '<SENHA_FORTE>';"
 ```
 
 ### 2. Clone do repo
 
 ```bash
 cd /home/ubuntu
-git clone git@github.com:caiooliveirac/Transportes-samu.git transportes-samu
-cd transportes-samu
+git clone git@github.com:caiooliveirac/Transportes-samu.git
+cd Transportes-samu
 ```
 
 ### 3. Env de produção
@@ -68,17 +82,38 @@ pm2 save
 pm2 startup       # imprime comando sudo — copia e executa
 ```
 
-**Importante**: o worker Baileys (`transportes-ingest`) vai imprimir QR no
-log do PM2 logo após o primeiro start. Pegue com:
+**Importante**: `transportes-ingest` **não** abre sessão WhatsApp e não
+pede QR. Ele escuta webhooks do gateway `whatsmeow-gw` em
+`127.0.0.1:3082`. Registre este worker como segundo destino do gateway
+(o primeiro é o `giro-wa-adapter`, do Giro de Leitos):
 
 ```bash
-pm2 logs transportes-ingest --lines 200 --raw
+docker inspect whatsmeow-gw --format '{{json .Config.Env}}'   # anote o env atual
 ```
 
-Peça pro chefe escanear o QR. Depois disso, a sessão fica em
-`apps/ingest/auth/` (gitignored) e sobrevive a restarts.
+Recrie o container com os dois destinos na variável (é lista separada por
+vírgula; a sessão vive no volume, então **não** precisa re-parear):
 
-### 6. nginx + TLS
+```bash
+WHATSAPP_WEBHOOK=http://host.docker.internal:3081/hook,http://host.docker.internal:3082/hook
+```
+
+Confira que subiu:
+
+```bash
+curl -s http://127.0.0.1:3082/ | jq          # {"status":"ok","worker":"..."}
+pm2 logs transportes-ingest --lines 50
+```
+
+### 6. nginx
+
+No magalu já está feito: o mapa central tem
+`transportes.mnrs.com.br 3020;` e o TLS é o certificado curinga da
+Cloudflare para `*.mnrs.com.br`. O `location /api/stream` do mesmo arquivo
+desliga o buffer e estende o timeout — o dashboard usa SSE, e o
+`proxy_read_timeout 120s` do `location /` cortaria a conexão a cada 2min.
+
+Em host novo sem mapa central, use `deploy/nginx.conf.template`:
 
 ```bash
 sudo cp deploy/nginx.conf.template /etc/nginx/sites-available/transportes.mnrs.com.br
@@ -89,7 +124,8 @@ sudo certbot --nginx -d transportes.mnrs.com.br
 
 ### 7. DNS
 
-Apontar `transportes.mnrs.com.br` A record para o IP público da EC2.
+`transportes.mnrs.com.br` aponta para o proxy da Cloudflare, que fala com
+o magalu. Nada a fazer se o curinga `*.mnrs.com.br` já resolve.
 
 ### 8. Validar
 
@@ -100,9 +136,10 @@ curl https://transportes.mnrs.com.br/api/health
 
 Abrir `https://transportes.mnrs.com.br` no browser, verificar painel + LiveBadge verde + WorkerBadge verde.
 
-### 9. GH Actions runner
+### 9. GH Actions runner (pendente no magalu)
 
-Se ainda não existir runner self-hosted na EC2 marcado pra esse repo, criar via UI:
+Não existe runner marcado pra este repo no magalu — enquanto isso,
+deploy é manual pelo script. Para automatizar, criar via UI:
 
 `Settings → Actions → Runners → New self-hosted runner` (instruções da
 própria página). Marcar com labels que combinem com o `runs-on:
@@ -117,8 +154,8 @@ A partir daí, `git push main` no laptop deploya automaticamente.
 ### Reiniciar manualmente
 
 ```bash
-ssh ubuntu@<EC2>
-cd /home/ubuntu/transportes-samu
+ssh magalu
+cd /home/ubuntu/Transportes-samu
 GIT_COMMIT_SHA=$(git rev-parse HEAD) pm2 reload ecosystem.config.cjs --update-env
 ```
 
@@ -137,42 +174,45 @@ curl https://transportes.mnrs.com.br/api/health | jq
 curl https://transportes.mnrs.com.br/api/health/worker | jq
 ```
 
-### Backup do `auth/`
+### Sessão WhatsApp
 
-A pasta `apps/ingest/auth/` contém as credenciais Baileys. **Perder essa pasta força novo QR scan no celular do chefe.** Cronjob diário sugerido:
-
-```bash
-0 3 * * * cd /home/ubuntu/transportes-samu && tar czf /home/ubuntu/backups/auth-$(date +\%F).tar.gz apps/ingest/auth/ && find /home/ubuntu/backups/ -name 'auth-*.tar.gz' -mtime +14 -delete
-```
-
-(Para encriptar, faça pipe pra `age` ou `gpg`.)
+Não há sessão para guardar aqui. A credencial do número do chefe de
+plantão vive no volume do container `whatsmeow-gw` e é responsabilidade
+da infra do gateway (compartilhada com o Giro de Leitos). Perder esse
+volume força novo pareamento e derruba os **dois** consumidores.
 
 ### Backup do banco
 
 ```bash
-0 4 * * * pg_dump -U transportes_samu transportes_samu | gzip > /home/ubuntu/backups/db-$(date +\%F).sql.gz
+0 4 * * * pg_dump -U transportes transportes | gzip > /home/ubuntu/backups/db-$(date +\%F).sql.gz
 ```
 
 ---
 
 ## Troubleshooting
 
-**Worker em "logged_out" no WorkerBadge:**
-- WhatsApp removeu o aparelho do chefe. Limpar sessão e re-scanear:
-  ```bash
-  pm2 stop transportes-ingest
-  rm -rf apps/ingest/auth
-  pm2 start transportes-ingest
-  pm2 logs transportes-ingest
-  # Chefe escaneia novo QR
-  ```
+**Worker "closed" no WorkerBadge, ou nenhum transporte novo entrando:**
+1. O worker está de pé? `curl -s http://127.0.0.1:3082/` deve responder
+   `{"status":"ok",...}`. Se não, `pm2 logs transportes-ingest`.
+2. O gateway ainda lista este destino?
+   `docker inspect whatsmeow-gw --format '{{json .Config.Env}}' | grep WEBHOOK`
+   — um `docker run` de manutenção pode ter recriado o container só com
+   o hook do Giro.
+3. O gateway ainda está pareado?
+   `curl -s -u <basic-auth> http://127.0.0.1:3080/app/devices`
+4. Assinatura batendo? `webhook signature mismatch` no log do worker
+   significa `WA_WEBHOOK_SECRET` diferente do `--webhook-secret` do
+   gateway — o worker devolve 401 e o gateway desiste após 5 tentativas.
+5. Chegou mas não virou transporte? Log `webhook event skipped` diz o
+   motivo (`chat_not_allowed` = `WA_ALLOWED_CHATS` errado; `filtered:` =
+   heurística de `pipeline/filter.ts` barrou).
 
 **Public health 502:**
-- PM2 caiu ou nginx não está apontando pro :3005. Verificar:
+- PM2 caiu ou o mapa do nginx não aponta pro :3020. Verificar:
   ```bash
   pm2 status                          # transportes-web online?
-  sudo systemctl status nginx
-  curl http://127.0.0.1:3005/api/health
+  grep transportes /etc/nginx/sites-available/mnrs.conf
+  curl http://127.0.0.1:3020/api/health
   ```
 
 **Deploy falha em "local health never reported ok":**

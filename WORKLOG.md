@@ -3,11 +3,58 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-07-13 · Layout mobile 375px (header responsivo, grid empilhado, sheet full-width)
+**Última atualização:** 2026-08-14 · Ingestão real via gateway whatsmeow (fim do Baileys)
 
 ---
 
 ## Resume here
+
+**Ingestão real — worker passa a consumir o gateway whatsmeow compartilhado.**
+
+O app rodava só com dados fictícios (`db:seed:mock`) porque o worker
+Baileys estava desligado desde o PR #23: ele abria sessão própria no
+**mesmo número** do chefe de plantão (557197150415) que o Giro de Leitos
+já usava, os dois disputavam slot de Linked Device e viviam em loop de
+reconexão (diagnóstico em `giro-de-leitos/docs/baileys-isolamento-2026-05-25.md`).
+
+Causa raiz resolvida trocando o transporte, não remendando a reconexão:
+o magalu já roda `whatsmeow-gw` (`go-whatsapp-web-multidevice`,
+`127.0.0.1:3080`) como **dono único** da sessão, e o gateway aceita uma
+**lista** de webhooks (`--webhook strings`). O Giro consome pelo
+`giro-wa-adapter` (:3081); o transportes vira o segundo destino (:3082).
+
+- `apps/ingest/src/webhook/payload.ts` — normaliza o envelope do gateway
+  (`{event, device_id, payload}`) e verifica o HMAC
+  `X-Hub-Signature-256`. Contrato conferido no fonte upstream
+  (`event_message.go`), não adivinhado
+- `apps/ingest/src/webhook/server.ts` — servidor HTTP loopback; reusa
+  `pipeline/filter` + `pipeline/dedupe` + `pipeline/ingest` intactos.
+  Responde 2xx só depois de ingerir (erro = 500 → gateway reenvia 5x;
+  `wa_message_id` UNIQUE torna o retry inofensivo)
+- `apps/ingest/src/index.ts` reescrito; `src/whatsapp/` e
+  `src/scripts/list-groups.ts` deletados; Baileys e qrcode-terminal
+  fora do `package.json`
+- Env: `WA_WEBHOOK_PORT`, `WA_WEBHOOK_SECRET` substituem `WA_SESSION_DIR`.
+  `WA_ALLOWED_CHATS=557181082189-1589997108@g.us` (grupo **UT APOIO** —
+  confirmado com o usuário; não existe grupo chamado "TRANSPORTES" na
+  conta do chefe)
+- `transportes-ingest` volta ao `ecosystem.config.cjs`; o
+  `pm2 delete transportes-ingest` do `deploy-production.sh` saiu
+- 8 testes em `apps/ingest/__tests__/payload.test.ts`; typecheck e lint ok
+
+**Pendência de operação (não feita — mexe em serviço do Giro):** recriar
+o container `whatsmeow-gw` com
+`WHATSAPP_WEBHOOK=http://host.docker.internal:3081/hook,http://host.docker.internal:3082/hook`.
+A sessão vive no volume, então não há re-pareamento. Enquanto isso não
+for feito, nada chega no :3082. Roteiro em `deploy/README.md`.
+
+**Pendência anterior que continua valendo:** o app ainda não está no ar
+no magalu (`transportes.mnrs.com.br` aponta pra :3020, que não escuta;
+não há processo PM2 `transportes-*`). O checkout existe em
+`/home/ubuntu/Transportes-samu` — note o T maiúsculo, enquanto todo o
+deploy (ecosystem, scripts) assume `/home/ubuntu/transportes-samu`.
+
+## Fase 9 (anterior)
 
 **Fix — dashboard utilizável em 375px (sem scroll horizontal).**
 

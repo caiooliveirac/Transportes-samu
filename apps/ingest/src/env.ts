@@ -4,12 +4,11 @@ import { fileURLToPath } from "node:url";
 
 /**
  * Carrega .env.local da raiz do monorepo. Mesma estratégia que
- * packages/db/src/load-env — Baileys, Drizzle e Next compartilham
+ * packages/db/src/load-env — ingest, Drizzle e Next compartilham
  * DATABASE_URL e WA_* sem cópias paralelas.
  *
  * Chame **antes** de qualquer import que leia env (incluindo
- * @samu-cru/db). Por isso este módulo é importado primeiro em index.ts
- * e em scripts/list-groups.ts.
+ * @samu-cru/db). Por isso este módulo é importado primeiro em index.ts.
  */
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..", "..", "..");
@@ -49,12 +48,16 @@ function parseList(value: string | undefined): string[] {
 export const ENV = {
   /** ID único do worker (uma linha em worker_heartbeat). */
   workerId: optional("WORKER_ID", "local-dev"),
-  /** Diretório onde Baileys persiste a sessão. Gitignored. */
-  sessionDir: optional("WA_SESSION_DIR", resolve(here, "..", "auth")),
+  /** Porta local do webhook que o gateway whatsmeow chama. Só loopback. */
+  webhookPort: Number(optional("WA_WEBHOOK_PORT", "3082")),
+  /**
+   * Segredo do HMAC `X-Hub-Signature-256`. Precisa bater com
+   * `--webhook-secret` do container `whatsmeow-gw` (default upstream:
+   * "secret"). Vazio desliga a verificação — só para teste local.
+   */
+  webhookSecret: process.env.WA_WEBHOOK_SECRET ?? "secret",
   /** JIDs de grupos permitidos. Vazio = aceita TODOS (modo descoberta). */
   allowedChats: parseList(process.env.WA_ALLOWED_CHATS),
-  /** "true" pula a ingestão e só lista grupos quando conectar. */
-  listGroups: process.env.LIST_GROUPS === "true",
   /** "true" parseia e loga, mas não escreve no DB. */
   dryRun: process.env.DRY_RUN === "true",
   logLevel: optional("LOG_LEVEL", "info"),

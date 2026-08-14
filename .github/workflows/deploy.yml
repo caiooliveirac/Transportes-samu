@@ -2,7 +2,7 @@ name: CI → Deploy
 
 # Mesmo padrão validado em caiooliveirac/plantoes: o runner self-hosted
 # É a EC2 de produção. Não há SSH-from-GH; o deploy é simplesmente
-# `cd /home/ubuntu/transportes-samu && bash scripts/deploy-production.sh`
+# `cd /home/ubuntu/Transportes-samu && bash scripts/deploy-production.sh`
 # executando localmente no runner.
 
 on:
