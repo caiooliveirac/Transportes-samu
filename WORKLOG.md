@@ -48,6 +48,26 @@ legenda, é ack. Confundir os dois leva a concluir errado que o grupo manda
 solicitação por print. `mediaOnly` no health é quem responde essa pergunta
 de verdade (esteve em 0 o tempo todo).
 
+**O worker rodou o dia inteiro em `DRY_RUN`.** Em 14/08 o corpus tinha 37
+mensagens, 11 aprovadas pelo filtro e **zero transportes**. Não era limiar
+nem parser: `/home/ubuntu/Transportes-samu/.env` trazia `DRY_RUN=true`, e
+`apps/ingest/src/env.ts` carrega `.env` como fallback depois do
+`.env.production` (que não tem a variável). O log dizia
+`DRY_RUN parsed but NOT inserting transport` com confiança 0,40–0,90 —
+o parser acertava e nada era gravado.
+
+- corrigido no servidor: `DRY_RUN=false` no `.env` (backup `.env.bak-dryrun-*`),
+  `pm2 restart transportes-ingest --update-env`
+- `createTransportFromMessage` extraído de `ingestMessage` — parse+insert
+  numa cópia só, usada também pelo backfill
+- `pnpm ingest:backfill` recupera mensagem aprovada que ficou sem
+  transporte. Simulação por padrão, `--aplicar` grava. Só age sobre
+  `filterVerdict.pass === true`: barrada é corpus, não caso
+
+Nota de segurança: ao inspecionar `/proc/<pid>/environ` o
+`WA_WEBHOOK_SECRET` apareceu em terminal. Rotacionar no gateway e no
+`.env.production` quando conveniente.
+
 **A primeira mensagem real já expôs a decisão de produto pendente.** Ela foi
 BARRADA pelo filtro (`not enough hints (2/3)`) e é sobre transporte — mas é
 COBRANÇA de um caso existente ("paciente com risco de perder a vaga",

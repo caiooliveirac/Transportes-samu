@@ -126,13 +126,43 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
     };
   }
 
-  // 2. Parser
-  const parsed = parseMessage({
+  // 2. Parser + insert (compartilhado com o backfill)
+  const created = await createTransportFromMessage({
+    whatsappMessageDbId,
     rawText: input.rawText,
     receivedAt: input.receivedAt,
   });
 
-  // 3. Resolve origin unit code → DB id (parser pode vir com null)
+  return {
+    created: created.transportId !== null,
+    stored: true,
+    whatsappMessageDbId,
+    transportId: created.transportId ?? undefined,
+    globalConfidence: created.globalConfidence,
+  };
+}
+
+/**
+ * Parseia uma mensagem já gravada e cria o transport ligado a ela.
+ * Extraído de `ingestMessage` porque o backfill (`scripts/backfill.ts`)
+ * precisa exatamente disto para as mensagens que ficaram sem transporte —
+ * duas cópias divergiriam no primeiro campo novo do parser.
+ *
+ * Respeita `DRY_RUN`: parseia, loga e devolve `transportId: null`.
+ */
+export async function createTransportFromMessage(params: {
+  whatsappMessageDbId: number;
+  rawText: string;
+  receivedAt: Date;
+}): Promise<{ transportId: string | null; globalConfidence: number; status: string }> {
+  const baseLog = logger.child({ whatsappMessageDbId: params.whatsappMessageDbId });
+
+  const parsed = parseMessage({
+    rawText: params.rawText,
+    receivedAt: params.receivedAt,
+  });
+
+  // Resolve origin unit code → DB id (parser pode vir com null)
   const units = await getUnitsByCode();
   const originResolved = parsed.originUnitCode.value
     ? (units.get(parsed.originUnitCode.value) ?? null)
@@ -149,16 +179,14 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
       "DRY_RUN parsed but NOT inserting transport",
     );
     return {
-      created: false,
-      stored: true,
-      whatsappMessageDbId,
+      transportId: null,
       globalConfidence: parsed.globalConfidence,
+      status: parsed.suggestedStatus,
     };
   }
 
-  // 4. Insert transport_request
   const transport = await insertTransport({
-    whatsappMessageId: whatsappMessageDbId,
+    whatsappMessageId: params.whatsappMessageDbId,
     patientName: parsed.patientName.value ?? "(sem nome)",
     patientAgeText: parsed.patientAgeYears.value
       ? `${parsed.patientAgeYears.value}a`
@@ -192,11 +220,9 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
   );
 
   return {
-    created: true,
-    stored: true,
-    whatsappMessageDbId,
     transportId: transport.id,
     globalConfidence: parsed.globalConfidence,
+    status: transport.status,
   };
 }
 
