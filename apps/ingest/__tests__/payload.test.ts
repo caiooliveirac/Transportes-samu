@@ -29,6 +29,32 @@ describe("normalizeWebhook", () => {
     expect(msg!.text).toBe("Paciente para hemodiálise, destino HGE");
     expect(msg!.receivedAt.toISOString()).toBe("2026-08-14T02:25:34.000Z");
     expect(msg!.fromMe).toBe(false);
+    expect(msg!.mediaKind).toBeNull();
+  });
+
+  it("identifica a mídia quando a mensagem não tem texto", () => {
+    const { body: _body, ...semTexto } = messageEvent.payload;
+    const img = normalizeWebhook({
+      ...messageEvent,
+      payload: { ...semTexto, image: { media_path: "/app/statics/x.jpg" } },
+    });
+    expect(img!.text).toBeNull();
+    expect(img!.mediaKind).toBe("image");
+
+    const doc = normalizeWebhook({
+      ...messageEvent,
+      payload: { ...semTexto, document: { media_path: "/a.pdf" }, audio: null },
+    });
+    expect(doc!.mediaKind).toBe("document");
+  });
+
+  it("legenda de imagem conta como texto e a mídia continua sinalizada", () => {
+    const msg = normalizeWebhook({
+      ...messageEvent,
+      payload: { ...messageEvent.payload, image: { media_path: "/x.jpg" } },
+    });
+    expect(msg!.text).toBe("Paciente para hemodiálise, destino HGE");
+    expect(msg!.mediaKind).toBe("image");
   });
 
   it("em edição, targetMessageId aponta a mensagem original", () => {
