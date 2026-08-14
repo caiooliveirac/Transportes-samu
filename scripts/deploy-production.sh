@@ -62,14 +62,9 @@ info "building all workspaces"
 pnpm build
 
 # ─── Remove dormant ingest process (Baileys desligado) ────────────────────
-# Worker Baileys foi tirado do ecosystem por estar em loop de reconexão
-# competindo sessão WhatsApp com outra app no mesmo EC2. Pode estar
-# carregado no daemon PM2 desde deploys anteriores — tira do ar e do dump.
-if pm2 describe "$INGEST_NAME" >/dev/null 2>&1; then
-  info "deleting dormant $INGEST_NAME"
-  pm2 delete "$INGEST_NAME" || true
-  pm2 save || true
-fi
+# $INGEST_NAME voltou ao ecosystem: não é mais worker Baileys (que
+# competia sessão WhatsApp), e sim receptor de webhook do gateway
+# whatsmeow em 127.0.0.1:3082. O reload abaixo cuida dele junto com a web.
 
 # ─── PM2 reload (or start on first deploy) ────────────────────────────────
 if pm2 describe "$WEB_NAME" >/dev/null 2>&1; then

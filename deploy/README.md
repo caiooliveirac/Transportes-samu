@@ -68,15 +68,28 @@ pm2 save
 pm2 startup       # imprime comando sudo — copia e executa
 ```
 
-**Importante**: o worker Baileys (`transportes-ingest`) vai imprimir QR no
-log do PM2 logo após o primeiro start. Pegue com:
+**Importante**: `transportes-ingest` **não** abre sessão WhatsApp e não
+pede QR. Ele escuta webhooks do gateway `whatsmeow-gw` em
+`127.0.0.1:3082`. Registre este worker como segundo destino do gateway
+(o primeiro é o `giro-wa-adapter`, do Giro de Leitos):
 
 ```bash
-pm2 logs transportes-ingest --lines 200 --raw
+docker inspect whatsmeow-gw --format '{{json .Config.Env}}'   # anote o env atual
 ```
 
-Peça pro chefe escanear o QR. Depois disso, a sessão fica em
-`apps/ingest/auth/` (gitignored) e sobrevive a restarts.
+Recrie o container com os dois destinos na variável (é lista separada por
+vírgula; a sessão vive no volume, então **não** precisa re-parear):
+
+```bash
+WHATSAPP_WEBHOOK=http://host.docker.internal:3081/hook,http://host.docker.internal:3082/hook
+```
+
+Confira que subiu:
+
+```bash
+curl -s http://127.0.0.1:3082/ | jq          # {"status":"ok","worker":"..."}
+pm2 logs transportes-ingest --lines 50
+```
 
 ### 6. nginx + TLS
 
@@ -137,15 +150,12 @@ curl https://transportes.mnrs.com.br/api/health | jq
 curl https://transportes.mnrs.com.br/api/health/worker | jq
 ```
 
-### Backup do `auth/`
+### Sessão WhatsApp
 
-A pasta `apps/ingest/auth/` contém as credenciais Baileys. **Perder essa pasta força novo QR scan no celular do chefe.** Cronjob diário sugerido:
-
-```bash
-0 3 * * * cd /home/ubuntu/transportes-samu && tar czf /home/ubuntu/backups/auth-$(date +\%F).tar.gz apps/ingest/auth/ && find /home/ubuntu/backups/ -name 'auth-*.tar.gz' -mtime +14 -delete
-```
-
-(Para encriptar, faça pipe pra `age` ou `gpg`.)
+Não há sessão para guardar aqui. A credencial do número do chefe de
+plantão vive no volume do container `whatsmeow-gw` e é responsabilidade
+da infra do gateway (compartilhada com o Giro de Leitos). Perder esse
+volume força novo pareamento e derruba os **dois** consumidores.
 
 ### Backup do banco
 
@@ -157,15 +167,21 @@ A pasta `apps/ingest/auth/` contém as credenciais Baileys. **Perder essa pasta 
 
 ## Troubleshooting
 
-**Worker em "logged_out" no WorkerBadge:**
-- WhatsApp removeu o aparelho do chefe. Limpar sessão e re-scanear:
-  ```bash
-  pm2 stop transportes-ingest
-  rm -rf apps/ingest/auth
-  pm2 start transportes-ingest
-  pm2 logs transportes-ingest
-  # Chefe escaneia novo QR
-  ```
+**Worker "closed" no WorkerBadge, ou nenhum transporte novo entrando:**
+1. O worker está de pé? `curl -s http://127.0.0.1:3082/` deve responder
+   `{"status":"ok",...}`. Se não, `pm2 logs transportes-ingest`.
+2. O gateway ainda lista este destino?
+   `docker inspect whatsmeow-gw --format '{{json .Config.Env}}' | grep WEBHOOK`
+   — um `docker run` de manutenção pode ter recriado o container só com
+   o hook do Giro.
+3. O gateway ainda está pareado?
+   `curl -s -u <basic-auth> http://127.0.0.1:3080/app/devices`
+4. Assinatura batendo? `webhook signature mismatch` no log do worker
+   significa `WA_WEBHOOK_SECRET` diferente do `--webhook-secret` do
+   gateway — o worker devolve 401 e o gateway desiste após 5 tentativas.
+5. Chegou mas não virou transporte? Log `webhook event skipped` diz o
+   motivo (`chat_not_allowed` = `WA_ALLOWED_CHATS` errado; `filtered:` =
+   heurística de `pipeline/filter.ts` barrou).
 
 **Public health 502:**
 - PM2 caiu ou nginx não está apontando pro :3005. Verificar:
