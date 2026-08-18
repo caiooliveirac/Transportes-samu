@@ -18,7 +18,12 @@ import {
   HelpCircle,
   RefreshCcw,
 } from "lucide-react";
-import { STATUS, type TripType } from "@samu-cru/shared";
+import {
+  MISSING_DESTINATION,
+  MISSING_PROCEDURE,
+  STATUS,
+  type TripType,
+} from "@samu-cru/shared";
 import { firstNameAndInitial, formatHHMM, formatRelative } from "@/lib/format";
 import { isFaded, isOverdue, isUrgent } from "@/lib/urgency";
 import type { SerializedTransport } from "@/lib/dashboard-types";
@@ -68,6 +73,10 @@ export function TransportCard({
       ? "text-amber-300"
       : "text-zinc-300";
   const hyp = transport.diagnoses?.[0] ?? transport.procedure;
+  // Campo que o parser não entendeu fica visível na fila, não só na gaveta:
+  // é o card que precisa de um humano com a mensagem na frente.
+  const missingDestination = transport.destinationName === MISSING_DESTINATION;
+  const missingProcedure = transport.procedure === MISSING_PROCEDURE;
 
   return (
     <div
@@ -104,7 +113,12 @@ export function TransportCard({
       >
         <div className="flex items-baseline gap-2">
           <TripIcon className="h-3 w-3 shrink-0 self-center text-zinc-600" />
-          <span className="dest min-w-0 flex-1 truncate text-[13px] leading-tight font-semibold text-zinc-100">
+          <span
+            className={cn(
+              "dest min-w-0 flex-1 truncate text-[13px] leading-tight font-semibold",
+              missingDestination ? "text-amber-300/90 italic" : "text-zinc-100",
+            )}
+          >
             {transport.destinationName}
           </span>
           {deadline ? (
@@ -134,9 +148,24 @@ export function TransportCard({
             <span className={cn("h-1 w-1 rounded-full", meta.dotClass)} />
             {meta.short}
           </span>
-          <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate text-[11px]",
+              missingProcedure && !transport.diagnoses?.[0]
+                ? "text-amber-300/80 italic"
+                : "text-zinc-500",
+            )}
+          >
             {hyp}
           </span>
+          {(missingDestination || missingProcedure) && (
+            <span
+              className="shrink-0 rounded bg-amber-500/10 px-1 text-[9.5px] font-medium text-amber-300/90 ring-1 ring-inset ring-amber-500/25"
+              title="O parser não entendeu um campo — abra e corrija"
+            >
+              revisar
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 text-[10.5px] text-zinc-500">

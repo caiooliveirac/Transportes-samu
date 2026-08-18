@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { parseMessage } from "@samu-cru/parser";
+import { MISSING_DESTINATION, MISSING_PROCEDURE } from "@samu-cru/shared";
 import {
   db,
   insertTransport,
@@ -198,8 +199,8 @@ export async function createTransportFromMessage(params: {
     patientCpf: parsed.patientCpf.value,
     originUnitId: originResolved?.id ?? null,
     originUnitRaw: parsed.originUnitCode.value ?? parsed.originUnitCode.raw ?? "—",
-    destinationName: parsed.destination.value ?? "(sem destino)",
-    procedure: parsed.procedure.value ?? "(sem procedimento)",
+    destinationName: parsed.destination.value ?? MISSING_DESTINATION,
+    procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
     procedureTime: parsed.procedureTimeText.value,
     deadlineAt: parsed.deadlineAt.value,
     tripType: parsed.tripType.value ?? "unknown",
@@ -316,8 +317,8 @@ export async function reparseTransportFromMessage(params: {
       patientCpf: parsed.patientCpf.value,
       originUnitId: originResolved?.id ?? null,
       originUnitRaw: parsed.originUnitCode.value ?? "—",
-      destinationName: parsed.destination.value ?? "(sem destino)",
-      procedure: parsed.procedure.value ?? "(sem procedimento)",
+      destinationName: parsed.destination.value ?? MISSING_DESTINATION,
+      procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
       procedureTime: parsed.procedureTimeText.value,
       deadlineAt: parsed.deadlineAt.value,
       tripType: parsed.tripType.value ?? "unknown",

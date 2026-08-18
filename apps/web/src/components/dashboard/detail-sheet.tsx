@@ -10,11 +10,15 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
+  Check,
   MapPin,
+  Pencil,
   RefreshCcw,
   Sparkles,
 } from "lucide-react";
 import {
+  MISSING_DESTINATION,
+  MISSING_PROCEDURE,
   STATUS,
   UNITS,
   SEVERITY,
@@ -251,12 +255,26 @@ function DetailBody({
               <TripIcon className="h-3 w-3" />
               {tripLabel}
             </div>
-            <div className="flex items-center gap-2 text-[12.5px] font-semibold text-zinc-50">
-              <MapPin className="h-3.5 w-3.5 text-emerald-400" />
-              {transport.destinationName}
-            </div>
-            <div className="mt-1 border-t border-white/[0.04] pt-2 text-[11.5px] text-zinc-400">
-              {transport.procedure}
+            <CorrectableField
+              transportId={transport.id}
+              field="destinationName"
+              value={transport.destinationName}
+              placeholder={MISSING_DESTINATION}
+              label="Hospital de destino"
+              onSaved={onPatch}
+              icon={<MapPin className="h-3.5 w-3.5 text-emerald-400" />}
+              className="text-[12.5px] font-semibold text-zinc-50"
+            />
+            <div className="mt-1 border-t border-white/[0.04] pt-2">
+              <CorrectableField
+                transportId={transport.id}
+                field="procedure"
+                value={transport.procedure}
+                placeholder={MISSING_PROCEDURE}
+                label="Procedimento"
+                onSaved={onPatch}
+                className="text-[11.5px] text-zinc-400"
+              />
             </div>
           </div>
         </Section>
@@ -354,6 +372,119 @@ function DetailBody({
           </Section>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Campo que o parser pode ter errado. Quando ele não entendeu, o card
+ * mostra o input aberto — é o momento em que o regulador está com a
+ * mensagem na frente e sabe a resposta. Salva no banco (PUT), não só no
+ * cliente: a correção precisa sobreviver ao reload e valer para os outros
+ * reguladores. "Mostrar texto bruto" está logo abaixo, na mesma gaveta.
+ */
+function CorrectableField({
+  transportId,
+  field,
+  value,
+  placeholder,
+  label,
+  icon,
+  className,
+  onSaved,
+}: {
+  transportId: string;
+  field: "destinationName" | "procedure";
+  value: string;
+  placeholder: string;
+  label: string;
+  icon?: React.ReactNode;
+  className?: string;
+  onSaved: (patch: Partial<SerializedTransport>) => void;
+}) {
+  const missing = value === placeholder;
+  const [editing, setEditing] = useState(missing);
+  const [draft, setDraft] = useState(missing ? "" : value);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    const next = draft.trim();
+    if (next.length < 2) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/transports/${transportId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: next }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const body = (await r.json()) as { transport: SerializedTransport };
+      onSaved({ [field]: next, tripType: body.transport?.tripType });
+      setEditing(false);
+    } catch (err) {
+      console.error("[detail-sheet] correction failed:", err);
+      setError("Não salvou. Tente de novo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="group flex items-center gap-2">
+        {icon}
+        <span className={className}>{value}</span>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title={`Corrigir ${label.toLowerCase()}`}
+          className="text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100 hover:text-zinc-300 focus:opacity-100"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        {icon}
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void save();
+            if (e.key === "Escape") {
+              setEditing(false);
+              setDraft(missing ? "" : value);
+            }
+          }}
+          autoFocus={missing}
+          maxLength={200}
+          placeholder={label}
+          aria-label={label}
+          className="bg-ink-50 min-w-0 flex-1 rounded-md px-2 py-1 text-[12.5px] text-zinc-100 ring-1 ring-inset ring-white/10 outline-none focus:ring-sky-500/50"
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={saving || draft.trim().length < 2}
+          onClick={() => void save()}
+          className="h-7 px-2 text-[11px]"
+        >
+          <Check /> salvar
+        </Button>
+      </div>
+      {missing && (
+        <p className="text-[11px] text-amber-300/80">
+          O parser não entendeu este campo. O que você escrever aqui fica
+          gravado.
+        </p>
+      )}
+      {error && <p className="text-[11px] text-rose-300">{error}</p>}
     </div>
   );
 }

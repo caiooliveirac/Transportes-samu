@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { findTransportWithContext, updateTransportProgress } from "@samu-cru/db";
+import {
+  correctTransportFields,
+  findTransportWithContext,
+  updateTransportProgress,
+} from "@samu-cru/db";
+import { inferTripType } from "@samu-cru/parser";
 import {
   AMBULANCE_KIND,
   TRANSPORT_STATUS,
@@ -29,6 +34,63 @@ export async function GET(_req: Request, { params }: Params) {
     console.error(`[api/transports/${id}] failed:`, err);
     return NextResponse.json(
       { error: "Failed to load transport" },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * Correção humana de destino/procedimento — o campo que o parser não
+ * entendeu. Salva no banco (não só no cliente) e recalcula o tipo de
+ * viagem a partir do procedimento corrigido, que é o que decide se a
+ * viatura espera o paciente.
+ */
+export async function PUT(req: Request, { params }: Params) {
+  const session = await getSession();
+  if (!session || session.kind !== "user") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  let body: { destinationName?: string; procedure?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const destinationName = body.destinationName?.trim();
+  const procedure = body.procedure?.trim();
+  if (!destinationName && !procedure) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+  for (const v of [destinationName, procedure]) {
+    if (v !== undefined && (v.length < 2 || v.length > 200)) {
+      return NextResponse.json({ error: "Invalid value" }, { status: 400 });
+    }
+  }
+
+  try {
+    const updated = await correctTransportFields(
+      id,
+      {
+        destinationName,
+        procedure,
+        tripType: procedure ? (inferTripType(procedure).value ?? undefined) : undefined,
+      },
+      session.userId,
+    );
+    if (!updated) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json(
+      { ok: true, transport: updated },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (err) {
+    console.error(`[api/transports/${id}] PUT failed:`, err);
+    return NextResponse.json(
+      { error: "Failed to correct transport" },
       { status: 500 },
     );
   }

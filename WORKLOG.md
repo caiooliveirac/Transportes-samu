@@ -56,15 +56,23 @@ vira unidade nova (o `db:seed` do deploy cria), siglas `HEOM`, `HMSCP`,
 antes de aplicar — ele não mexe em status que o regulador moveu, só promove
 `pendente_revisao` → `novo`.
 
+**Correção humana do que o parser não entendeu (item 2, feito).** O card que
+fica com `(sem destino)`/`(sem procedimento)` mostra "revisar" na fila, em
+âmbar, e na gaveta o campo já abre como input. Salva por
+`PUT /api/transports/:id` → `correctTransportFields`, que grava no banco,
+recalcula `trip_type` pelo procedimento corrigido (`inferTripType`) e registra
+o valor anterior em `transport_events` (`kind: fields_corrected`) — é o
+material que mostra onde o parser erra. `MISSING_DESTINATION`/
+`MISSING_PROCEDURE` saíram de string solta no ingest para o `shared`, que é
+quem a UI consulta. "Mostrar texto bruto" já existia, na mesma gaveta.
+
 **Pendente, combinado com o usuário e ainda NÃO implementado:**
 1. card de espera — identidade visual própria para cateterismo/exame, relógio
    de "ambulância presa há X horas" e o caminho "liberou sem a viatura →
    despachar equipe para buscar", com botão opcional para marcar que virou
    só ida
-2. campo editável de destino/procedimento no card que o parser não entendeu,
-   **salvando no banco** (não só no cliente), com "Mostrar texto bruto" ao lado
-3. tag própria para `A PARTIR DE`, distinta de horário fixo e de `IMEDIATO`
-4. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
+2. tag própria para `A PARTIR DE`, distinta de horário fixo e de `IMEDIATO`
+3. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
    HGRS`), 1 caso só até agora; esperar mais antes de codificar
 
 

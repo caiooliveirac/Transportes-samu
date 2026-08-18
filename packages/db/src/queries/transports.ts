@@ -7,6 +7,7 @@ import {
   type DelayReason,
   type Severity,
   type TransportStatus,
+  type TripType,
 } from "@samu-cru/shared";
 import { db } from "../client";
 import {
@@ -334,6 +335,63 @@ export async function setTransportSeverity(
     fromValue: { severity: current?.prev ?? null },
     toValue: { severity },
   });
+}
+
+export interface ParsedFieldCorrection {
+  destinationName?: string;
+  procedure?: string;
+  /** Recalculado a partir do procedimento corrigido; ausente = não mexe. */
+  tripType?: TripType;
+}
+
+/**
+ * Correção humana do que o parser não entendeu. Vale para o card que ficou
+ * com "(sem destino)"/"(sem procedimento)" e para o que ele leu errado.
+ *
+ * Grava no banco de verdade — a correção precisa sobreviver ao reload e
+ * aparecer para os outros reguladores. Fica registrada em
+ * `transport_events` com o valor anterior: é o material que mostra onde o
+ * parser erra e não fica só na cabeça de quem corrigiu.
+ */
+export async function correctTransportFields(
+  transportId: string,
+  patch: ParsedFieldCorrection,
+  userId?: number,
+): Promise<TransportRequest | null> {
+  const [current] = await db
+    .select({
+      destinationName: transportRequests.destinationName,
+      procedure: transportRequests.procedure,
+      tripType: transportRequests.tripType,
+    })
+    .from(transportRequests)
+    .where(eq(transportRequests.id, transportId))
+    .limit(1);
+  if (!current) return null;
+
+  const next: Partial<typeof transportRequests.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+  if (patch.destinationName !== undefined) next.destinationName = patch.destinationName;
+  if (patch.procedure !== undefined) next.procedure = patch.procedure;
+  if (patch.tripType !== undefined) next.tripType = patch.tripType;
+
+  const [updated] = await db
+    .update(transportRequests)
+    .set(next)
+    .where(eq(transportRequests.id, transportId))
+    .returning();
+
+  await db.insert(transportEvents).values({
+    transportId,
+    kind: "fields_corrected",
+    userId: userId ?? null,
+    fromValue: current,
+    toValue: next,
+    note: "correção manual do que o parser não entendeu",
+  });
+
+  return updated ?? null;
 }
 
 export interface TransportProgressPatch {
