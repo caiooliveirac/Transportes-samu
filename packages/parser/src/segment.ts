@@ -106,6 +106,15 @@ const PENDING_LABELS: ReadonlySet<string> = new Set([
   "unidade de destino", "local", "origem", "unidade de origem", "horario",
 ]);
 
+/**
+ * Rótulos que aparecem sem dois-pontos, no começo da linha. Lista mínima:
+ * é a única forma de "Local Instituto do cérebro" virar destino sem que
+ * "Ambulância básica" vire rótulo também.
+ */
+const BARE_LABELS: ReadonlySet<string> = new Set([
+  "local", "destino", "origem", "horario",
+]);
+
 function splitLabelPairs(line: string): Array<[string, string]> {
   const starts: Array<{ label: string; labelAt: number; valueAt: number }> = [];
   INLINE_LABEL_RE.lastIndex = 0;
@@ -167,6 +176,14 @@ export function segment(raw: string): Segmented {
     const orphan = line.match(/^([A-Za-zÀ-ſ][A-Za-zÀ-ſ0-9 ./]{1,40}?)\s*:\s*$/);
     if (orphan && PENDING_LABELS.has(matchKey(orphan[1]!))) {
       pendingLabel = orphan[1]!;
+      continue;
+    }
+    // "Local Instituto do cérebro" / "Horário 14:00": rótulo conhecido, sem
+    // dois-pontos nenhum. Só vale para o vocabulário — senão qualquer frase
+    // de duas palavras viraria par.
+    const bare = line.match(/^([A-Za-zÀ-ſ][A-Za-zÀ-ſ/]{2,20})\s+(\S.*)$/);
+    if (bare && pairs.length === 0 && BARE_LABELS.has(matchKey(bare[1]!))) {
+      put(bare[1]!, bare[2]!);
       continue;
     }
     if (pairs.length > 1) {

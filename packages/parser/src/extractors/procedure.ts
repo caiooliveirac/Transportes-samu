@@ -23,7 +23,15 @@ interface ProcedureTerm {
 
 const PROCEDURE_TERMS: ReadonlyArray<ProcedureTerm> = [
   // Fica no destino.
-  { pattern: /\binterna\w*/, canonical: "Internamento", waits: false },
+  // "INTRNAMENTO" existe no corpus — typo de quem digita com o paciente na
+  // maca. Não vale exigir ortografia.
+  { pattern: /\binterna\w*|\bintr?n?amento\b/, canonical: "Internamento", waits: false },
+  // "CLINICA MEDICA" sozinho é leito de clínica: fica no destino.
+  {
+    pattern: /\bclinica\s+(medica|cirurgica|pediatrica|psiquiatrica|ortopedica)\b/,
+    canonical: "Internação clínica",
+    waits: false,
+  },
   { pattern: /\btransfer\w*/, canonical: "Transferência", waits: false },
   { pattern: /\bleito\b/, canonical: "Leito", waits: false },
   { pattern: /\bpaliativ\w*/, canonical: "Cuidados paliativos", waits: false },
@@ -37,7 +45,7 @@ const PROCEDURE_TERMS: ReadonlyArray<ProcedureTerm> = [
   { pattern: /\bhemodi[áa]lise\b/, canonical: "Hemodiálise", waits: true },
   { pattern: /\bangio\w*/, canonical: "Angiotomografia", waits: true },
   { pattern: /\btomografia\b|\btc\b/, canonical: "Tomografia", waits: true },
-  { pattern: /\bressonancia\b|\brm\b/, canonical: "Ressonância", waits: true },
+  { pattern: /\bressonancia\b|\brm\b|\brnm\b/, canonical: "Ressonância", waits: true },
   { pattern: /\bdoppler\b|\busg\b|\bultrassom\b/, canonical: "USG", waits: true },
   { pattern: /\braio.?x\b|\brx\b/, canonical: "RX", waits: true },
   { pattern: /\beco\w*/, canonical: "Ecocardiograma", waits: true },
