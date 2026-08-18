@@ -12,6 +12,8 @@
 import {
   Ambulance,
   ArrowRight,
+  Hourglass,
+  PackageOpen,
   ChevronDown,
   ChevronUp,
   GripVertical,
@@ -19,9 +21,14 @@ import {
   RefreshCcw,
 } from "lucide-react";
 import {
+  DEADLINE_KIND_LABEL,
+  formatWait,
+  waitMinutes,
+  waitTone,
   MISSING_DESTINATION,
   MISSING_PROCEDURE,
   STATUS,
+  deadlineKind,
   type TripType,
 } from "@samu-cru/shared";
 import { firstNameAndInitial, formatHHMM, formatRelative } from "@/lib/format";
@@ -62,8 +69,8 @@ export function TransportCard({
 }: Props) {
   const meta = STATUS[transport.status];
   const TripIcon = TRIP_ICON[transport.tripType];
-  const overdue = isOverdue(transport.deadlineAt, transport.status, now);
-  const urgent = isUrgent(transport.deadlineAt, transport.status, now);
+  const overdue = isOverdue(transport.deadlineAt, transport.status, now, transport.procedureTime);
+  const urgent = isUrgent(transport.deadlineAt, transport.status, now, transport.procedureTime);
   const faded = isFaded(transport.status, transport.updatedAt, now);
   const deadline = transport.deadlineAt ? new Date(transport.deadlineAt) : null;
   const dragging = drag.draggingId === transport.id;
@@ -77,6 +84,18 @@ export function TransportCard({
   // é o card que precisa de um humano com a mensagem na frente.
   const missingDestination = transport.destinationName === MISSING_DESTINATION;
   const missingProcedure = transport.procedure === MISSING_PROCEDURE;
+  const dlKind = deadlineKind(transport.procedureTime);
+  // Viatura parada no destino num ida-e-volta, e a dívida de buscar o
+  // paciente quando ela foi liberada sem ele.
+  const waiting = waitMinutes(transport.waitStartedAt, now);
+  const waitClass =
+    waiting === null
+      ? ""
+      : waitTone(waiting) === "alert"
+        ? "bg-rose-500/15 text-rose-200 ring-rose-500/30"
+        : waitTone(waiting) === "attention"
+          ? "bg-amber-500/12 text-amber-200 ring-amber-500/30"
+          : "bg-sky-500/10 text-sky-200/90 ring-sky-500/25";
 
   return (
     <div
@@ -158,6 +177,27 @@ export function TransportCard({
           >
             {hyp}
           </span>
+          {transport.pickupNeeded && (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-fuchsia-500/15 px-1 text-[9.5px] font-semibold text-fuchsia-200 ring-1 ring-inset ring-fuchsia-500/30"
+              title="A viatura foi liberada sem o paciente — alguém precisa buscar quando ele liberar"
+            >
+              <PackageOpen className="h-2.5 w-2.5" />
+              buscar depois
+            </span>
+          )}
+          {waiting !== null && (
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold ring-1 ring-inset",
+                waitClass,
+              )}
+              title="Viatura esperando o paciente no destino"
+            >
+              <Hourglass className="h-2.5 w-2.5" />
+              {formatWait(waiting)}
+            </span>
+          )}
           {(missingDestination || missingProcedure) && (
             <span
               className="shrink-0 rounded bg-amber-500/10 px-1 text-[9.5px] font-medium text-amber-300/90 ring-1 ring-inset ring-amber-500/25"
@@ -196,10 +236,13 @@ export function TransportCard({
                     ? "text-rose-400"
                     : urgent
                       ? "text-amber-400/90"
-                      : "text-zinc-500"
+                      : dlKind === "from"
+                        ? "text-sky-300/80"
+                        : "text-zinc-500"
                 }
               >
-                limite {formatRelative(deadline, now)}
+                {DEADLINE_KIND_LABEL[dlKind === "none" ? "fixed" : dlKind]}{" "}
+                {formatRelative(deadline, now)}
               </span>
             </>
           )}

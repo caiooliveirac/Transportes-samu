@@ -113,6 +113,7 @@ export async function PATCH(req: Request, { params }: Params) {
     status?: TransportStatus;
     ambulanceLabel?: string | null;
     ambulanceKind?: AmbulanceKind | null;
+    pickupNeeded?: boolean;
   };
   try {
     body = await req.json();
@@ -135,9 +136,13 @@ export async function PATCH(req: Request, { params }: Params) {
       { status: 400 },
     );
   }
+  if (body.pickupNeeded !== undefined && typeof body.pickupNeeded !== "boolean") {
+    return NextResponse.json({ error: "Invalid pickupNeeded" }, { status: 400 });
+  }
   if (
     body.status === undefined &&
-    body.ambulanceLabel === undefined
+    body.ambulanceLabel === undefined &&
+    body.pickupNeeded === undefined
   ) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
@@ -149,6 +154,7 @@ export async function PATCH(req: Request, { params }: Params) {
         status: body.status,
         ambulanceLabel: body.ambulanceLabel,
         ambulanceKind: body.ambulanceKind ?? undefined,
+        pickupNeeded: body.pickupNeeded,
       },
       session.userId,
     );

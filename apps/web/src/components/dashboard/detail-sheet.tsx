@@ -11,19 +11,26 @@ import {
   EyeOff,
   HelpCircle,
   Check,
+  Hourglass,
   MapPin,
+  PackageOpen,
   Pencil,
   RefreshCcw,
   Sparkles,
 } from "lucide-react";
 import {
+  DEADLINE_KIND_LABEL,
   MISSING_DESTINATION,
   MISSING_PROCEDURE,
   STATUS,
   UNITS,
   SEVERITY,
   SEVERITY_META,
+  deadlineKind,
   deriveSeverity,
+  formatWait,
+  waitMinutes,
+  waitTone,
   type Severity,
   type TripType,
 } from "@samu-cru/shared";
@@ -164,6 +171,7 @@ function DetailBody({
   }, [transport.originUnitRaw]);
 
   const now = useMemo(() => new Date(), []);
+  const dlKind = deadlineKind(transport.procedureTime);
   const deadlineLabel = transport.deadlineAt
     ? `${formatHHMM(transport.deadlineAt)} · ${formatRelative(transport.deadlineAt, now)}`
     : "—";
@@ -233,6 +241,25 @@ function DetailBody({
         <StatusPill status={transport.status} />
         <div className="flex items-center gap-1.5 font-mono text-[12px] text-zinc-300">
           <Calendar className="h-3.5 w-3.5 text-zinc-500" />
+          {dlKind !== "none" && (
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10px] ring-1 ring-inset",
+                dlKind === "from"
+                  ? "bg-sky-500/10 text-sky-300 ring-sky-500/25"
+                  : dlKind === "immediate"
+                    ? "bg-rose-500/10 text-rose-300 ring-rose-500/25"
+                    : "bg-white/[0.04] text-zinc-400 ring-white/10",
+              )}
+              title={
+                dlKind === "from"
+                  ? "Janela aberta: antes disso não adianta ir, depois não está atrasado"
+                  : undefined
+              }
+            >
+              {DEADLINE_KIND_LABEL[dlKind]}
+            </span>
+          )}
           {deadlineLabel}
         </div>
       </div>
@@ -278,6 +305,12 @@ function DetailBody({
             </div>
           </div>
         </Section>
+
+        {(transport.tripType === "round_trip" || transport.pickupNeeded) && (
+          <Section label="Espera da viatura">
+            <WaitControl transport={transport} now={now} onPatched={onPatch} />
+          </Section>
+        )}
 
         <Section label="Clínica">
           <VitalGrid vitals={transport.vitals} />
@@ -372,6 +405,103 @@ function DetailBody({
           </Section>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Ida-e-volta é o caso em que a viatura fica parada no destino esperando o
+ * paciente — cateterismo, endoscopia, avaliação. Duas coisas precisam ser
+ * visíveis: há quanto tempo ela está presa, e a saída de liberá-la, que
+ * transfere a dívida para "alguém tem que buscar depois".
+ */
+function WaitControl({
+  transport,
+  now,
+  onPatched,
+}: {
+  transport: SerializedTransport;
+  now: Date;
+  onPatched: (patch: Partial<SerializedTransport>) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const waiting = waitMinutes(transport.waitStartedAt, now);
+  const tone = waiting === null ? null : waitTone(waiting);
+
+  async function setPickup(pickupNeeded: boolean) {
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/transports/${transport.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pickupNeeded }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const body = (await r.json()) as { transport: SerializedTransport };
+      onPatched({
+        pickupNeeded,
+        tripType: body.transport?.tripType ?? transport.tripType,
+        waitStartedAt: body.transport?.waitStartedAt ?? null,
+      });
+    } catch (err) {
+      console.error("[detail-sheet] pickup toggle failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md bg-white/[0.02] p-3 ring-1 ring-inset ring-white/5">
+      {waiting !== null ? (
+        <div
+          className={cn(
+            "flex items-center gap-2 text-[12.5px] font-semibold",
+            tone === "alert"
+              ? "text-rose-300"
+              : tone === "attention"
+                ? "text-amber-300"
+                : "text-sky-300",
+          )}
+        >
+          <Hourglass className="h-3.5 w-3.5" />
+          Viatura esperando há {formatWait(waiting)}
+        </div>
+      ) : (
+        <p className="text-[12px] text-zinc-400">
+          {transport.pickupNeeded
+            ? "Viatura liberada sem o paciente."
+            : "A viatura espera o paciente no destino. O relógio começa quando ela chegar."}
+        </p>
+      )}
+
+      {transport.pickupNeeded ? (
+        <div className="flex flex-col gap-2">
+          <p className="flex items-center gap-1.5 text-[12px] text-fuchsia-200">
+            <PackageOpen className="h-3.5 w-3.5" />
+            Falta despachar equipe para buscar o paciente.
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={saving}
+            onClick={() => void setPickup(false)}
+            className="h-7 self-start px-2 text-[11px]"
+          >
+            <Check /> busca resolvida
+          </Button>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={saving}
+          onClick={() => void setPickup(true)}
+          className="h-7 self-start px-2 text-[11px]"
+          title="A viagem vira só ida e fica marcada a dívida de buscar o paciente depois"
+        >
+          <PackageOpen /> liberar viatura (buscar depois)
+        </Button>
+      )}
     </div>
   );
 }

@@ -50,6 +50,13 @@
       "when": 1783982248006,
       "tag": "0006_cuddly_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787094157888,
+      "tag": "0007_furry_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

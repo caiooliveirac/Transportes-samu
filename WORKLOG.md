@@ -66,13 +66,25 @@ material que mostra onde o parser erra. `MISSING_DESTINATION`/
 `MISSING_PROCEDURE` saíram de string solta no ingest para o `shared`, que é
 quem a UI consulta. "Mostrar texto bruto" já existia, na mesma gaveta.
 
+**Espera da viatura (item 1, feito).** Migration `0007` traz
+`wait_started_at` e `pickup_needed` em `transport_requests`. Num
+`round_trip`, chegar ao destino liga o relógio; sair (retornando/concluído/
+cancelado) desliga. O card mostra ampulheta com o tempo — azul, âmbar em
+1h30, rosa em 3h — e o botão "liberar viatura (buscar depois)" na gaveta
+converte a viagem em `one_way` e acende o selo **buscar depois**, que é a
+dívida de despachar uma segunda equipe. Um segundo clique ("busca
+resolvida") a quita. Tudo em `transport_events` (`vehicle_released` /
+`pickup_resolved`).
+
+**Tag de prazo (item 3, feito).** `deadlineKind()` no `shared` separa
+`immediate` / `fixed` / `from` a partir do texto que já está em
+`procedure_time` — sem coluna nova. `A PARTIR DE` é **janela aberta**:
+`isOverdue`/`isUrgent` param de pintar de vermelho um caso que só ficou
+elegível. O card troca "limite" por "a partir de" e a gaveta ganha a
+etiqueta.
+
 **Pendente, combinado com o usuário e ainda NÃO implementado:**
-1. card de espera — identidade visual própria para cateterismo/exame, relógio
-   de "ambulância presa há X horas" e o caminho "liberou sem a viatura →
-   despachar equipe para buscar", com botão opcional para marcar que virou
-   só ida
-2. tag própria para `A PARTIR DE`, distinta de horário fixo e de `IMEDIATO`
-3. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
+1. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
    HGRS`), 1 caso só até agora; esperar mais antes de codificar
 
 

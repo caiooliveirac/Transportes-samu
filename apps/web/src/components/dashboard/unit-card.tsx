@@ -36,8 +36,8 @@ export function UnitCard({
 }: Props) {
   const urgentCount = transports.filter(
     (t) =>
-      isOverdue(t.deadlineAt, t.status, now) ||
-      isUrgent(t.deadlineAt, t.status, now),
+      isOverdue(t.deadlineAt, t.status, now, t.procedureTime) ||
+      isUrgent(t.deadlineAt, t.status, now, t.procedureTime),
   ).length;
   const load = Math.min(100, transports.length * 14);
 

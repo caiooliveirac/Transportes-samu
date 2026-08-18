@@ -401,6 +401,11 @@ export interface TransportProgressPatch {
   ambulanceLabel?: string | null;
   /** Tipo da viatura; derivado do prefixo quando omitido. */
   ambulanceKind?: AmbulanceKind | null;
+  /**
+   * A viatura foi liberada antes do paciente (ida-e-volta que virou só
+   * ida). `true` marca a dívida de mandar alguém buscar; `false` a quita.
+   */
+  pickupNeeded?: boolean;
 }
 
 /**
@@ -477,6 +482,40 @@ export async function updateTransportProgress(
       userId: userId ?? null,
       fromValue: { status: current.status },
       toValue: { status: nextStatusValue },
+    });
+
+    // Ida-e-volta: chegar ao destino é quando a viatura passa a esperar o
+    // paciente. Sair do destino (retornando/concluído) para o relógio.
+    if (current.tripType === "round_trip") {
+      if (nextStatusValue === "chegou_destino" && !current.waitStartedAt) {
+        updates.waitStartedAt = new Date();
+      } else if (
+        nextStatusValue === "retornando_origem" ||
+        nextStatusValue === "concluido" ||
+        nextStatusValue === "cancelado"
+      ) {
+        updates.waitStartedAt = null;
+      }
+    }
+  }
+
+  // 3) Viatura liberada sem o paciente: a viagem vira só ida e fica a
+  // dívida de despachar outra equipe na volta.
+  if (patch.pickupNeeded !== undefined) {
+    updates.pickupNeeded = patch.pickupNeeded;
+    if (patch.pickupNeeded) {
+      updates.tripType = "one_way";
+      updates.waitStartedAt = null;
+    }
+    events.push({
+      transportId,
+      kind: patch.pickupNeeded ? "vehicle_released" : "pickup_resolved",
+      userId: userId ?? null,
+      fromValue: { pickupNeeded: current.pickupNeeded, tripType: current.tripType },
+      toValue: { pickupNeeded: patch.pickupNeeded },
+      note: patch.pickupNeeded
+        ? "viatura liberada sem o paciente — buscar depois"
+        : "busca resolvida",
     });
   }
 

@@ -1,0 +1,2 @@
+ALTER TABLE "transport_requests" ADD COLUMN "wait_started_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "transport_requests" ADD COLUMN "pickup_needed" boolean DEFAULT false NOT NULL;
