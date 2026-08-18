@@ -187,6 +187,19 @@ export const transportRequests = pgTable(
     ambulanceAssignedAt: timestamp("ambulance_assigned_at", {
       withTimezone: true,
     }),
+    /**
+     * Ida-e-volta: quando a viatura chegou ao destino e ficou esperando o
+     * paciente. É o relógio da ambulância presa — cateterismo, endoscopia
+     * e avaliação podem segurar uma viatura por horas, e sem esse marco o
+     * regulador só descobre pelo rádio.
+     */
+    waitStartedAt: timestamp("wait_started_at", { withTimezone: true }),
+    /**
+     * A viatura foi liberada antes do paciente. Alguém vai ter que
+     * despachar uma segunda equipe para buscar quando ele liberar — é o
+     * caso que some da fila se ninguém marcar.
+     */
+    pickupNeeded: boolean("pickup_needed").notNull().default(false),
     parseConfidence: real("parse_confidence").notNull().default(1.0),
     parseWarnings: text("parse_warnings").array(),
     notes: text("notes"),

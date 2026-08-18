@@ -1,0 +1,10 @@
+{
+  "receivedAt": "2026-08-15T13:00:00Z",
+  "expect": {
+    "originUnitCode": { "equals": "upa_santo_antonio", "minConfidence": 0.8 },
+    "destination": { "includes": "HOSPITAL MUNICIPAL" },
+    "procedure": { "includes": "COLONOSCOPIA" },
+    "tripType": { "equals": "round_trip" },
+    "vitals": { "glasgow": 15 }
+  }
+}

@@ -84,8 +84,8 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
   const urgencyRank = useCallback(
     (t: SerializedTransport): number => {
       if (isTerminal(t.status)) return 4;
-      if (isOverdue(t.deadlineAt, t.status, now)) return 0;
-      if (isUrgent(t.deadlineAt, t.status, now)) return 1;
+      if (isOverdue(t.deadlineAt, t.status, now, t.procedureTime)) return 0;
+      if (isUrgent(t.deadlineAt, t.status, now, t.procedureTime)) return 1;
       if (t.deadlineAt) return 2;
       return 3;
     },
@@ -111,7 +111,7 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
       data.transports.filter((t) => {
         if (!matchesQuery(t, query)) return false;
         if (filter === "today") return isToday(t.deadlineAt, data.serverTime);
-        if (filter === "overdue") return isOverdue(t.deadlineAt, t.status, now);
+        if (filter === "overdue") return isOverdue(t.deadlineAt, t.status, now, t.procedureTime);
         if (filter === "pending") return t.status === "pendente_revisao";
         return true;
       }),
@@ -125,9 +125,9 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
     let pending = 0;
     for (const t of data.transports) {
       if (!isTerminal(t.status)) active++;
-      const od = isOverdue(t.deadlineAt, t.status, now);
+      const od = isOverdue(t.deadlineAt, t.status, now, t.procedureTime);
       if (od) overdue++;
-      if (od || isUrgent(t.deadlineAt, t.status, now)) urgent++;
+      if (od || isUrgent(t.deadlineAt, t.status, now, t.procedureTime)) urgent++;
       if (t.status === "pendente_revisao") pending++;
     }
     return { active, urgent, overdue, pending };

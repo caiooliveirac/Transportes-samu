@@ -9,6 +9,85 @@
 
 ## Resume here
 
+**Análise das falhas do parser sobre 129 casos reais (18/08).** 46 casos
+tinham pelo menos um campo perdido: 24 sem destino, 21 sem procedimento,
+31 com `trip_type: unknown`. Nenhuma delas era limiar — eram seis defeitos
+de leitura, todos confirmados rodando `segment()` sobre o texto de produção:
+
+- **negrito no lugar dos dois-pontos** (`*UNIDADE DE DESTINO* HMS - HOSPITAL
+  MUNICIPAL`): 23 casos, 20 deles a UPA Santo Antônio inteira. Sem o `:`, o
+  hífen do valor virava separador e a chave saía `unidade de destino hms`.
+  `normalize` agora marca rótulo em negrito ANTES de descartar o negrito —
+  é o único momento em que dá para saber que aquilo era rótulo
+- **rótulo no meio da linha engolindo o valor anterior** (`AUTORIZADO POR:
+  Dr. X *PROCEDIMENTO*: INTERNAÇÃO`): 7 casos. Rótulo mid-line agora exige
+  vocabulário (`INLINE_LABEL_VOCAB`); no início da linha a heurística antiga
+  continua valendo
+- **valor na linha de baixo** (`MOTIVO:` / `COLONOSCOPIA`): lista curta de
+  rótulos que aceitam isso — `SUSPEITA DIAGNÓSTICA:` fica de fora de
+  propósito, ali o valor são várias linhas e quem lê é o extractor de
+  diagnóstico
+- **sinônimos que faltavam**: `PROCEDIMENTO/ESPECIALIDADE`, `MOTIVO DE
+  SOLICITAÇÃO`, `DATA/HORA DE APRESENTAÇÃO`, `LOCAL` (destino, no template
+  do Santo Inácio)
+- **procedimento em linha solta e sem rótulo** (`CATETERISMOS`,
+  `INTRNAMENTO CLINICA MEDICA`, `Av. Cir. Geral`): aceita linha de até 4
+  palavras que case com o vocabulário — prosa não entra
+- **diagnóstico ocupando o campo procedimento** (São Marcos manda
+  `SUSPEITA DIAGNÓSTICA // PROCEDIMENTO:` e despeja `P1. … P5. …`): blob que
+  começa com lista de problemas nunca vira procedimento; procura o termo de
+  procedimento dentro dele e, se não achar, deixa vazio para o humano
+
+`PROCEDURE_TERMS` substitui o `KEYWORD_INFERENCE` e carrega o que o
+regulador confirmou em 18/08: **cateterismo, endoscopia, colonoscopia,
+marcapasso, permicath, angiotomografia, USG/doppler, avaliação ‹especialidade›
+são espera** (`round_trip`) — a viatura fica com o paciente; se não ficar,
+alguém tem que despachar uma segunda equipe na volta.
+
+Também confirmado com o regulador e já no `shared`: Adroaldo Albergaria é
+alias de **Periperi**, Santo Inácio é **Pirajá** (já era), **PA Psiquiátrico**
+vira unidade nova (o `db:seed` do deploy cria), siglas `HEOM`, `HMSCP`,
+`ICOM`, `HGESF`, `CHD` (Roberto Santos), e no card Maria Luiza aparece como
+**Hosp. da Mulher** e Alan Sanches como **Mat. Alan Sanches**.
+
+5 fixtures novos, um por defeito, anonimizados. 63 testes no parser.
+
+**Depois do merge**, na ordem: `pnpm ingest:backfill --reparse` em simulação
+antes de aplicar — ele não mexe em status que o regulador moveu, só promove
+`pendente_revisao` → `novo`.
+
+**Correção humana do que o parser não entendeu (item 2, feito).** O card que
+fica com `(sem destino)`/`(sem procedimento)` mostra "revisar" na fila, em
+âmbar, e na gaveta o campo já abre como input. Salva por
+`PUT /api/transports/:id` → `correctTransportFields`, que grava no banco,
+recalcula `trip_type` pelo procedimento corrigido (`inferTripType`) e registra
+o valor anterior em `transport_events` (`kind: fields_corrected`) — é o
+material que mostra onde o parser erra. `MISSING_DESTINATION`/
+`MISSING_PROCEDURE` saíram de string solta no ingest para o `shared`, que é
+quem a UI consulta. "Mostrar texto bruto" já existia, na mesma gaveta.
+
+**Espera da viatura (item 1, feito).** Migration `0007` traz
+`wait_started_at` e `pickup_needed` em `transport_requests`. Num
+`round_trip`, chegar ao destino liga o relógio; sair (retornando/concluído/
+cancelado) desliga. O card mostra ampulheta com o tempo — azul, âmbar em
+1h30, rosa em 3h — e o botão "liberar viatura (buscar depois)" na gaveta
+converte a viagem em `one_way` e acende o selo **buscar depois**, que é a
+dívida de despachar uma segunda equipe. Um segundo clique ("busca
+resolvida") a quita. Tudo em `transport_events` (`vehicle_released` /
+`pickup_resolved`).
+
+**Tag de prazo (item 3, feito).** `deadlineKind()` no `shared` separa
+`immediate` / `fixed` / `from` a partir do texto que já está em
+`procedure_time` — sem coluna nova. `A PARTIR DE` é **janela aberta**:
+`isOverdue`/`isUrgent` param de pintar de vermelho um caso que só ficou
+elegível. O card troca "limite" por "a partir de" e a gaveta ganha a
+etiqueta.
+
+**Pendente, combinado com o usuário e ainda NÃO implementado:**
+1. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
+   HGRS`), 1 caso só até agora; esperar mais antes de codificar
+
+
 **Produção no magalu, de verdade.** Antes disso a app respondia em
 `transportes.mnrs.com.br` por um **processo órfão**: um `next start --port
 3020` solto desde 28/07, sem PM2, sem commit conhecido

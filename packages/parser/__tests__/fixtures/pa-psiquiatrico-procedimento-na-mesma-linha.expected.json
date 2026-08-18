@@ -1,0 +1,9 @@
+{
+  "receivedAt": "2026-08-15T16:56:00Z",
+  "expect": {
+    "originUnitCode": { "equals": "pa_psiquiatrico", "minConfidence": 0.8 },
+    "destination": { "includes": "JULIANO MOREIRA" },
+    "procedure": { "includes": "INTERNAÇÃO PSIQUIÁTRICA" },
+    "tripType": { "equals": "one_way" }
+  }
+}

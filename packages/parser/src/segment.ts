@@ -39,6 +39,14 @@ const LABEL_SYNONYMS: ReadonlyArray<readonly [string, string]> = [
   ["horario da apresentacao", "horario"],
   ["data/horario", "horario"],
   ["recurso solicitado", "procedimento"],
+  ["procedimento/especialidade", "procedimento"],
+  ["procedimento / especialidade", "procedimento"],
+  ["motivo de solicitacao", "motivo"],
+  ["motivo da solicitacao", "motivo"],
+  ["data/hora de apresentacao", "horario"],
+  ["hora de apresentacao", "horario"],
+  // "Local Instituto do Cérebro" é como o Santo Inácio escreve destino.
+  ["local", "destino"],
   ["suspeita diagnostica // procedimento", "procedimento"],
   ["suspeita diagnostica / procedimento", "procedimento"],
 ];
@@ -49,6 +57,55 @@ const LABEL_SYNONYMS: ReadonlyArray<readonly [string, string]> = [
  * inteira — foi assim que "2026  HORÁRIO" virou "hora 26" e o prazo caiu
  * como `invalid time`.
  */
+/**
+ * Rótulo NO MEIO da linha só conta se estiver neste vocabulário. Sem isso
+ * o regex engole o valor anterior: em
+ * "AUTORIZADO POR: Dr. Antônio PROCEDIMENTO: INTERNAÇÃO" ele lia o rótulo
+ * como "dr. antonio procedimento", o valor de AUTORIZADO POR ficava vazio,
+ * sobrava um par só e o procedimento sumia (7 casos).
+ *
+ * No início da linha a heurística antiga continua valendo — lá não há valor
+ * anterior para engolir.
+ */
+const INLINE_LABEL_VOCAB: ReadonlySet<string> = new Set([
+  "origem", "destino", "local", "unidade", "unidade de origem",
+  "unidade de destino", "unidade solicitante", "hospital de destino",
+  "procedimento", "procedimento/especialidade", "motivo",
+  "motivo de solicitacao", "recurso solicitado", "indicacao",
+  "data", "hora", "horario", "data/horario", "chegada",
+  "horario de chegada", "data/horario da apresentacao",
+  "data/hora de apresentacao", "nome", "paciente", "idade",
+  "data de nascimento", "dn", "cpf", "cns", "cartao sus",
+  "sd", "suspeita diagnostica", "diagnostico", "autorizado por",
+  "regulado por", "obs", "observacao", "transporte", "sinais vitais",
+  "fc", "fr", "pa", "ta", "sat", "spo2", "sto2", "glasgow", "temp",
+  "tax", "peso", "sv", "suporte o2",
+]);
+
+/**
+ * "DR. ANTONIO PROCEDIMENTO" → "PROCEDIMENTO". Devolve null quando nenhum
+ * sufixo de até 4 palavras está no vocabulário.
+ */
+function trimToVocab(label: string): string | null {
+  const words = label.trim().split(/\s+/);
+  for (let take = Math.min(4, words.length); take >= 1; take--) {
+    const cand = words.slice(words.length - take).join(" ");
+    if (INLINE_LABEL_VOCAB.has(matchKey(cand))) return cand;
+  }
+  return null;
+}
+
+/**
+ * Rótulo que aceita valor na linha seguinte. Lista curta de propósito:
+ * "SUSPEITA DIAGNÓSTICA:" também vem sozinha, mas ali o valor são VÁRIAS
+ * linhas e quem lê é o extractor de diagnóstico.
+ */
+const PENDING_LABELS: ReadonlySet<string> = new Set([
+  "motivo", "motivo de solicitacao", "procedimento",
+  "procedimento/especialidade", "recurso solicitado", "destino",
+  "unidade de destino", "local", "origem", "unidade de origem", "horario",
+]);
+
 function splitLabelPairs(line: string): Array<[string, string]> {
   const starts: Array<{ label: string; labelAt: number; valueAt: number }> = [];
   INLINE_LABEL_RE.lastIndex = 0;
@@ -56,7 +113,16 @@ function splitLabelPairs(line: string): Array<[string, string]> {
   while ((m = INLINE_LABEL_RE.exec(line)) !== null) {
     const label = m[1]!.trim();
     if (label.length < 2) continue;
-    starts.push({ label, labelAt: m.index, valueAt: m.index + m[0].length });
+    if (m.index === 0) {
+      starts.push({ label, labelAt: 0, valueAt: m[0].length });
+      continue;
+    }
+    const trimmed = trimToVocab(label);
+    if (!trimmed) continue;
+    // O rótulo começa onde o sufixo reconhecido começa, não onde o regex
+    // achou — o que vem antes é valor do par anterior.
+    const labelAt = m.index + m[0].indexOf(trimmed);
+    starts.push({ label: trimmed, labelAt, valueAt: m.index + m[0].length });
   }
 
   const pairs: Array<[string, string]> = [];
@@ -82,8 +148,27 @@ export function segment(raw: string): Segmented {
     if (!labels.has(key)) labels.set(key, value.trim());
   };
 
+  // "MOTIVO:" numa linha e "COLONOSCOPIA" na de baixo — a UPA Santo Antônio
+  // quebra o par em duas linhas. Guardar o rótulo órfão e casar com a
+  // próxima linha que não seja rótulo.
+  let pendingLabel: string | null = null;
+
   for (const line of lines) {
     const pairs = splitLabelPairs(line);
+    if (pendingLabel) {
+      const isLabelLine = pairs.length > 0 || LABEL_RE.test(line);
+      if (!isLabelLine) {
+        put(pendingLabel, line);
+        pendingLabel = null;
+        continue;
+      }
+      pendingLabel = null;
+    }
+    const orphan = line.match(/^([A-Za-zÀ-ſ][A-Za-zÀ-ſ0-9 ./]{1,40}?)\s*:\s*$/);
+    if (orphan && PENDING_LABELS.has(matchKey(orphan[1]!))) {
+      pendingLabel = orphan[1]!;
+      continue;
+    }
     if (pairs.length > 1) {
       for (const [label, value] of pairs) put(label, value);
       continue;

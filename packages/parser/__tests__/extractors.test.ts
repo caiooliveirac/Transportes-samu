@@ -125,7 +125,7 @@ describe("extractProcedure", () => {
 
   it("falls back to keyword inference", () => {
     const r = extractProcedure(segment("paciente precisa de TC crânio"));
-    expect(r.value).toBe("Exame");
+    expect(r.value).toBe("Tomografia");
     expect(r.warning).toMatch(/inferred/);
   });
 });
@@ -245,5 +245,27 @@ describe("fuzzy utilities", () => {
     expect(parseDate("01-01-99")?.getUTCFullYear()).toBe(1999);
     expect(parseDate("01-01-25")?.getUTCFullYear()).toBe(2025);
     expect(parseDate("invalid")).toBeNull();
+  });
+});
+
+describe("inferTripType — família da espera", () => {
+  // A correção manual no painel recalcula o tipo por aqui: o que o
+  // regulador digitar em "procedimento" decide se a viatura espera.
+  it.each([
+    ["Cateterismo", "round_trip"],
+    ["CATETERISMOS", "round_trip"],
+    ["Endoscopia digestiva", "round_trip"],
+    ["Implante de marcapasso", "round_trip"],
+    ["Implante de permicath", "round_trip"],
+    ["Angiotomografia de aorta", "round_trip"],
+    ["USG DOPPLER ARTERIAL", "round_trip"],
+    ["Avaliação Neurologia", "round_trip"],
+    ["Av. Cir. Geral", "round_trip"],
+    ["INTERNAMENTO ORTOPEDICO", "one_way"],
+    ["Transferência UTI", "one_way"],
+    ["Cuidados paliativos", "one_way"],
+    ["LEITO CIRURGIA GERAL", "one_way"],
+  ])("%s → %s", (procedure, expected) => {
+    expect(inferTripType(procedure).value).toBe(expected);
   });
 });

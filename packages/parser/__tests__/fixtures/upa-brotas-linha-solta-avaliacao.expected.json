@@ -1,0 +1,10 @@
+{
+  "receivedAt": "2026-08-16T18:00:00Z",
+  "expect": {
+    "originUnitCode": { "equals": "upa_brotas", "minConfidence": 0.8 },
+    "destination": { "includes": "Hospital Municipal" },
+    "procedure": { "includes": "Avaliação" },
+    "tripType": { "equals": "round_trip" },
+    "vitals": { "glasgow": 15 }
+  }
+}

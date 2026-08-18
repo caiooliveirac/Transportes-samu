@@ -7,6 +7,7 @@ import {
   type DelayReason,
   type Severity,
   type TransportStatus,
+  type TripType,
 } from "@samu-cru/shared";
 import { db } from "../client";
 import {
@@ -336,6 +337,63 @@ export async function setTransportSeverity(
   });
 }
 
+export interface ParsedFieldCorrection {
+  destinationName?: string;
+  procedure?: string;
+  /** Recalculado a partir do procedimento corrigido; ausente = não mexe. */
+  tripType?: TripType;
+}
+
+/**
+ * Correção humana do que o parser não entendeu. Vale para o card que ficou
+ * com "(sem destino)"/"(sem procedimento)" e para o que ele leu errado.
+ *
+ * Grava no banco de verdade — a correção precisa sobreviver ao reload e
+ * aparecer para os outros reguladores. Fica registrada em
+ * `transport_events` com o valor anterior: é o material que mostra onde o
+ * parser erra e não fica só na cabeça de quem corrigiu.
+ */
+export async function correctTransportFields(
+  transportId: string,
+  patch: ParsedFieldCorrection,
+  userId?: number,
+): Promise<TransportRequest | null> {
+  const [current] = await db
+    .select({
+      destinationName: transportRequests.destinationName,
+      procedure: transportRequests.procedure,
+      tripType: transportRequests.tripType,
+    })
+    .from(transportRequests)
+    .where(eq(transportRequests.id, transportId))
+    .limit(1);
+  if (!current) return null;
+
+  const next: Partial<typeof transportRequests.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+  if (patch.destinationName !== undefined) next.destinationName = patch.destinationName;
+  if (patch.procedure !== undefined) next.procedure = patch.procedure;
+  if (patch.tripType !== undefined) next.tripType = patch.tripType;
+
+  const [updated] = await db
+    .update(transportRequests)
+    .set(next)
+    .where(eq(transportRequests.id, transportId))
+    .returning();
+
+  await db.insert(transportEvents).values({
+    transportId,
+    kind: "fields_corrected",
+    userId: userId ?? null,
+    fromValue: current,
+    toValue: next,
+    note: "correção manual do que o parser não entendeu",
+  });
+
+  return updated ?? null;
+}
+
 export interface TransportProgressPatch {
   /** Novo status explícito (avançar/retroceder o ciclo de vida). */
   status?: TransportStatus;
@@ -343,6 +401,11 @@ export interface TransportProgressPatch {
   ambulanceLabel?: string | null;
   /** Tipo da viatura; derivado do prefixo quando omitido. */
   ambulanceKind?: AmbulanceKind | null;
+  /**
+   * A viatura foi liberada antes do paciente (ida-e-volta que virou só
+   * ida). `true` marca a dívida de mandar alguém buscar; `false` a quita.
+   */
+  pickupNeeded?: boolean;
 }
 
 /**
@@ -419,6 +482,40 @@ export async function updateTransportProgress(
       userId: userId ?? null,
       fromValue: { status: current.status },
       toValue: { status: nextStatusValue },
+    });
+
+    // Ida-e-volta: chegar ao destino é quando a viatura passa a esperar o
+    // paciente. Sair do destino (retornando/concluído) para o relógio.
+    if (current.tripType === "round_trip") {
+      if (nextStatusValue === "chegou_destino" && !current.waitStartedAt) {
+        updates.waitStartedAt = new Date();
+      } else if (
+        nextStatusValue === "retornando_origem" ||
+        nextStatusValue === "concluido" ||
+        nextStatusValue === "cancelado"
+      ) {
+        updates.waitStartedAt = null;
+      }
+    }
+  }
+
+  // 3) Viatura liberada sem o paciente: a viagem vira só ida e fica a
+  // dívida de despachar outra equipe na volta.
+  if (patch.pickupNeeded !== undefined) {
+    updates.pickupNeeded = patch.pickupNeeded;
+    if (patch.pickupNeeded) {
+      updates.tripType = "one_way";
+      updates.waitStartedAt = null;
+    }
+    events.push({
+      transportId,
+      kind: patch.pickupNeeded ? "vehicle_released" : "pickup_resolved",
+      userId: userId ?? null,
+      fromValue: { pickupNeeded: current.pickupNeeded, tripType: current.tripType },
+      toValue: { pickupNeeded: patch.pickupNeeded },
+      note: patch.pickupNeeded
+        ? "viatura liberada sem o paciente — buscar depois"
+        : "busca resolvida",
     });
   }
 

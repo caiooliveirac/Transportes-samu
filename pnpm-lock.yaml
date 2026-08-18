@@ -87,6 +87,9 @@ importers:
       '@samu-cru/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@samu-cru/parser':
+        specifier: workspace:*
+        version: link:../../packages/parser
       '@samu-cru/shared':
         specifier: workspace:*
         version: link:../../packages/shared
