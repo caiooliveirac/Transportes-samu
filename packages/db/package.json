@@ -33,6 +33,6 @@
   },
   "devDependencies": {
     "drizzle-kit": "^0.28.1",
-    "dotenv": "^16.4.7"
+    "dotenv": "^17.4.2"
   }
 }
