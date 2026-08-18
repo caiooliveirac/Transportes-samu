@@ -89,7 +89,14 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
     short: "UPA Periperi",
     full: "UPA Periperi",
     type: "UPA",
-    aliases: ["UPA PERIPERI", "PERIPERI"],
+    aliases: [
+      "UPA PERIPERI",
+      "PERIPERI",
+      // Confirmado pelo regulador em 2026-08-18: Adroaldo Albergaria é
+      // como a unidade assina no grupo.
+      "UPA ADROALDO ALBERGARIA",
+      "ADROALDO ALBERGARIA",
+    ],
     isOrigin: true,
     displayOrder: 60,
   },
@@ -242,6 +249,15 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
     displayOrder: 160,
   },
   {
+    code: "pa_psiquiatrico",
+    short: "PA Psiquiátrico",
+    full: "PA Psiquiátrico",
+    type: "PA",
+    aliases: ["PA PSIQUIATRICO", "PA PSIQUIÁTRICO", "PSIQUIATRICO", "PSIQUIÁTRICO"],
+    isOrigin: true,
+    displayOrder: 165,
+  },
+  {
     code: "hmum",
     short: "Hosp. Municipal",
     full: "Hospital Municipal de Salvador",
@@ -285,7 +301,33 @@ export const DESTINATION_ACRONYMS: Readonly<Record<string, string>> = {
   HEDJ: "HEDJ — Hospital Estadual Dois de Julho",
   HSA: "HSA — Hospital Santo Antônio",
   MTB: "MTB — Maternidade Tsylla Balbino",
+  // Confirmadas com o regulador em 2026-08-18, a partir do corpus real.
+  HEOM: "HEOM — Hospital Especializado Octávio Mangabeira",
+  HMSCP: "HMSCP — Hospital Mont Serrat",
+  ICOM: "ICOM — Hospital Couto Maia",
+  HGESF: "HGESF — Hospital Geral Ernesto Simões Filho",
+  CHD: "CHD — Centro de Hemodinâmica (Hospital Geral Roberto Santos)",
 };
+
+/**
+ * Como o hospital aparece NO CARD. O nome oficial é longo e o regulador
+ * lê a fila de relance: "Hospital da Mulher" e "Maternidade Alan Sanches"
+ * é o que ele reconhece.
+ */
+export const DESTINATION_DISPLAY_OVERRIDES: ReadonlyArray<
+  readonly [RegExp, string]
+> = [
+  [/maria\s+luiza|hosp\w*\s+da\s+mulher/i, "Hosp. da Mulher"],
+  [/alan\s+sanches/i, "Mat. Alan Sanches"],
+];
+
+/** Aplica os apelidos de card ao destino já extraído. */
+export function displayDestination(name: string): string {
+  for (const [pattern, label] of DESTINATION_DISPLAY_OVERRIDES) {
+    if (pattern.test(name)) return label;
+  }
+  return name;
+}
 
 export const AMBIGUOUS_DESTINATION_ACRONYMS: ReadonlyArray<string> = ["HM", "HG", "HE"];
 

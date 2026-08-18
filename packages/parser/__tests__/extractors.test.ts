@@ -125,7 +125,7 @@ describe("extractProcedure", () => {
 
   it("falls back to keyword inference", () => {
     const r = extractProcedure(segment("paciente precisa de TC crânio"));
-    expect(r.value).toBe("Exame");
+    expect(r.value).toBe("Tomografia");
     expect(r.warning).toMatch(/inferred/);
   });
 });

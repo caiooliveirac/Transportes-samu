@@ -1,6 +1,7 @@
 import {
   AMBIGUOUS_DESTINATION_ACRONYMS,
   DESTINATION_ACRONYMS,
+  displayDestination,
 } from "@samu-cru/shared";
 import type { Segmented } from "../segment";
 import type { Extracted } from "../types";
@@ -22,12 +23,14 @@ const DEST_KEYS = [
  * errado. Sigla desconhecida também passa adiante, sinalizada.
  */
 function expandAcronym(value: string): Extracted<string> {
+  const named = displayDestination(value.trim());
+  if (named !== value.trim()) return { value: named, confidence: 0.95, raw: value };
   const token = value.replace(/[^A-Za-zÀ-ſ]/g, "").toUpperCase();
   const isBareAcronym = token.length >= 2 && token.length <= 5 && token === value.trim().toUpperCase();
   if (!isBareAcronym) return { value: value.trim(), confidence: 0.95, raw: value };
 
   const expanded = DESTINATION_ACRONYMS[token];
-  if (expanded) return { value: expanded, confidence: 0.9, raw: value };
+  if (expanded) return { value: displayDestination(expanded), confidence: 0.9, raw: value };
 
   return {
     value: value.trim(),
