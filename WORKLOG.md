@@ -3,24 +3,88 @@
 > Estado de execução para retomada por novo agente após `/clear` ou queda
 > de sessão. Atualizado a cada commit relevante.
 
-**Última atualização:** 2026-08-14 · No ar no magalu (PM2) + ingestão real via gateway whatsmeow
+**Última atualização:** 2026-08-18 · Correção manual protegida do re-parse + card sem coluna deixa de sumir
 
 ---
 
 ## Resume here
 
-**Análise das falhas do parser sobre 129 casos reais (18/08).** 46 casos
+**Quatro defeitos de infraestrutura em volta do que o #56 entregou (18/08).**
+Vieram de rastrear a cadeia mensagem → card procurando por que ela some, e
+não de análise de texto — são complementares aos seis defeitos de leitura do
+#56, não concorrentes.
+
+**1. `--reparse` apagava correção manual.** A correção humana
+(`correctTransportFields`) e o re-parse (`reparseTransportFromMessage`)
+escrevem nas MESMAS colunas, e nada dizia de quem era o valor. O
+`transport_events` registra a correção, mas ninguém consulta log antes de um
+UPDATE. Resultado: `pnpm ingest:backfill --reparse --aplicar` zerava todo
+trabalho manual — e ele é rodado justamente depois de melhorar o parser, que
+é quando há mais correção acumulada para perder.
+
+`transport_requests.corrected_fields` (migration 0008) guarda a lista de
+campos cujo dono é humano. O re-parse pula esses, e imprime o que preservou.
+O UPDATE deixou de ser em massa: `corrected_fields` é por linha, então um dos
+gêmeos pode ter tido o destino corrigido e o outro não.
+
+**2. Card sem coluna sumia da tela.** `dashboard-shell` agrupava por
+`units.code` buscando `origin_unit_raw` com `if (list) list.push(t)` **sem
+else**. Origem não reconhecida → nenhuma coluna → descartado no cliente,
+ainda contado no cabeçalho, e a unidade dele aparecendo em "Sem pendências".
+Agora existe a faixa "Origem não identificada", e a gaveta ganhou o campo de
+origem (`<select>` de unidades, validado contra a tabela `units` no servidor)
+— é preenchendo ali que o caso sai do limbo. Sem isso não havia como
+consertar: o PUT só aceitava destino e procedimento.
+
+**3. `varchar(200)` recebendo texto livre.** `patient_name`,
+`origin_unit_raw` e `destination_name` — mesma armadilha que já estourou
+`procedure_time`. E o estouro acontecia com a linha de `whatsapp_messages` já
+gravada, então virava perda permanente (ver 4). Promovidos para `text`.
+
+**4. Falha pós-insert virava perda silenciosa.** `markSeen` era posto antes
+de ingerir e nunca desfeito, e o portão do ingest perguntava "acabei de
+gravar a mensagem?" em vez de "esta mensagem já tem transporte?". As duas
+perguntas parecem a mesma e não são: a mensagem é gravada ANTES do parser.
+Falha no insert do transporte → 500 → gateway reenvia → reenvio morre em
+`already_seen` (ou em `isNew === false`) e responde 200 sem criar nada.
+Agora `markSeen` é desfeito quando a ingestão lança, e o portão pergunta pelo
+transporte linkado — o reenvio se cura sozinho e duplicata continua recusada.
+
+**Medida: `pnpm ingest:replay`.** Roda filtro + parser sobre o corpus sem
+escrever nada e diz, por campo, o acerto — e quantos cards ficariam sem
+coluna. `--resumo` é a única saída sem PHI; `--min-hits N` simula outro
+limiar sobre o corpus inteiro. Rodar antes e depois de mexer em extrator é o
+que mostra se a mudança valeu.
+
+### Próximos passos
+
+```bash
+# 1. medida de referência ANTES de subir
+ssh magalu 'cd /home/ubuntu/Transportes-samu && set -a && source .env.production && set +a && pnpm ingest:replay 100 --resumo'
+
+# 2. deploy roda db:migrate sozinho (migration 0008)
+
+# 3. mesma medida depois, para comparar
+# 4. o --reparse agora pode ser rodado sem medo de apagar correção manual
+```
+
+**Limiar do filtro segue intocado** (`MIN_HITS` = 3). O `--min-hits` do
+replay mede o efeito de baixar sobre o corpus, para a decisão vir com dado.
+
+## Análise das falhas do parser (#56)
+
+**Sobre 129 casos reais (18/08).** 46 casos
 tinham pelo menos um campo perdido: 24 sem destino, 21 sem procedimento,
 31 com `trip_type: unknown`. Nenhuma delas era limiar — eram seis defeitos
 de leitura, todos confirmados rodando `segment()` sobre o texto de produção:
 
 - **negrito no lugar dos dois-pontos** (`*UNIDADE DE DESTINO* HMS - HOSPITAL
-  MUNICIPAL`): 23 casos, 20 deles a UPA Santo Antônio inteira. Sem o `:`, o
+MUNICIPAL`): 23 casos, 20 deles a UPA Santo Antônio inteira. Sem o `:`, o
   hífen do valor virava separador e a chave saía `unidade de destino hms`.
   `normalize` agora marca rótulo em negrito ANTES de descartar o negrito —
   é o único momento em que dá para saber que aquilo era rótulo
 - **rótulo no meio da linha engolindo o valor anterior** (`AUTORIZADO POR:
-  Dr. X *PROCEDIMENTO*: INTERNAÇÃO`): 7 casos. Rótulo mid-line agora exige
+Dr. X *PROCEDIMENTO*: INTERNAÇÃO`): 7 casos. Rótulo mid-line agora exige
   vocabulário (`INLINE_LABEL_VOCAB`); no início da linha a heurística antiga
   continua valendo
 - **valor na linha de baixo** (`MOTIVO:` / `COLONOSCOPIA`): lista curta de
@@ -28,7 +92,7 @@ de leitura, todos confirmados rodando `segment()` sobre o texto de produção:
   propósito, ali o valor são várias linhas e quem lê é o extractor de
   diagnóstico
 - **sinônimos que faltavam**: `PROCEDIMENTO/ESPECIALIDADE`, `MOTIVO DE
-  SOLICITAÇÃO`, `DATA/HORA DE APRESENTAÇÃO`, `LOCAL` (destino, no template
+SOLICITAÇÃO`, `DATA/HORA DE APRESENTAÇÃO`, `LOCAL` (destino, no template
   do Santo Inácio)
 - **procedimento em linha solta e sem rótulo** (`CATETERISMOS`,
   `INTRNAMENTO CLINICA MEDICA`, `Av. Cir. Geral`): aceita linha de até 4
@@ -84,9 +148,9 @@ elegível. O card troca "limite" por "a partir de" e a gaveta ganha a
 etiqueta.
 
 **Pendente, combinado com o usuário e ainda NÃO implementado:**
-1. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
-   HGRS`), 1 caso só até agora; esperar mais antes de codificar
 
+1. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
+HGRS`), 1 caso só até agora; esperar mais antes de codificar
 
 **Produção no magalu, de verdade.** Antes disso a app respondia em
 `transportes.mnrs.com.br` por um **processo órfão**: um `next start --port
@@ -155,7 +219,7 @@ template, todos estáveis.
 
 - rótulo sinônimo resolvido em `segment.ts` (`UNIDADE DE DESTINO` →
   `destino`, `DATA/HORÁRIO DA APRESENTAÇÃO` → `horario`, `RECURSO
-  SOLICITADO` → `procedimento`), não em cada extractor
+SOLICITADO` → `procedimento`), não em cada extractor
 - **dois rótulos na mesma linha** (`DATA: 14/08/2026 HORÁRIO: IMEDIATO`)
   agora viram dois pares. Antes o segundo sumia e o valor do primeiro era
   a linha inteira — daí `2026  HORÁRIO` virar "hora 26" e o prazo cair
@@ -259,6 +323,7 @@ o magalu já roda `whatsmeow-gw` (`go-whatsapp-web-multidevice`,
 - 8 testes em `apps/ingest/__tests__/payload.test.ts`; typecheck e lint ok
 
 Duas correções vieram depois, achadas em produção:
+
 - `GET /` do worker ganhou contadores (`received`/`ingested`/`skipped`/
   `rejected`/`lastWebhookAt`) — em `LOG_LEVEL=info` um worker que recebe e
   filtra tudo era indistinguível de um que não recebe nada
@@ -271,20 +336,21 @@ Duas correções vieram depois, achadas em produção:
 **Fix — dashboard utilizável em 375px (sem scroll horizontal).**
 
 Causa raiz: linha única do header (marca + busca w-44 + Novo + LiveBadge
-+ Admin + Sair, sem wrap) somava ~490px e expandia o viewport; elementos
-fixed herdavam essa largura e apareciam cortados.
 
-- `header.tsx`: container com `flex-wrap`; bloco pills+busca vira segunda
+- Admin + Sair, sem wrap) somava ~490px e expandia o viewport; elementos
+  fixed herdavam essa largura e apareciam cortados.
+
+* `header.tsx`: container com `flex-wrap`; bloco pills+busca vira segunda
   linha no mobile (`order-last w-full`, pills com overflow-x sem
   scrollbar, busca full-width) e volta ao lugar original no `sm+`; "Novo"
   (desabilitado, Fase 4) oculto no mobile; "Admin" vira só ícone no mobile
-- `dashboard-shell.tsx`: GRID `grid-cols-1` no mobile (empilha unidades),
+* `dashboard-shell.tsx`: GRID `grid-cols-1` no mobile (empilha unidades),
   `auto-fill minmax(300px,1fr)` a partir de `sm`; subtítulo "unidades sem
   ambulância própria" da faixa Prioridade oculto no mobile (cada card já
   repete a info)
-- `ui/sheet.tsx`: variantes right/left `w-full` no mobile, `sm:w-3/4`
+* `ui/sheet.tsx`: variantes right/left `w-full` no mobile, `sm:w-3/4`
   (mantém max-w-[480px])
-- Verificado no browser em 375×812 logado: scrollWidth=clientWidth=375,
+* Verificado no browser em 375×812 logado: scrollWidth=clientWidth=375,
   header em 2 linhas, sheet de detalhe full-width íntegro; desktop 1280
   inalterado. typecheck + lint ok.
 
@@ -329,6 +395,7 @@ Usuário pediu adaptar a aplicação para ter form próprio com cards e
 paleta moderna do plantoes/giro-de-leitos.
 
 **PRs abertos:**
+
 - **#23** `fix/emergency-disable-ingest` — tira `transportes-ingest` do
   PM2, deleta WorkerBadge/useWorkerStatus/api/health/worker. **MERGE
   PRIMEIRO** pra site voltar do 502.
@@ -336,6 +403,7 @@ paleta moderna do plantoes/giro-de-leitos.
   histórico + admin). Documentado abaixo.
 
 **Próxima ação após merge dos dois PRs:**
+
 ```bash
 # No EC2 (ou via deploy auto):
 pnpm db:seed:credentials        # cria credenciais das 17 unidades
@@ -352,64 +420,71 @@ caso volte com número WhatsApp dedicado no futuro.
 Substitui WhatsApp ingest pelo form web por unidade. Critérios de pronto:
 
 ### DB
+
 - [x] Schema: `unit_credentials` (1 por unidade, password hash scrypt) +
-  `transport_requests.source` ('whatsapp' | 'web_form' | 'manual') +
-  `transport_requests.created_by_unit_id` FK
+      `transport_requests.source` ('whatsapp' | 'web_form' | 'manual') +
+      `transport_requests.created_by_unit_id` FK
 - [x] Migration `0003_web_request_form.sql` gerada via drizzle-kit
 - [x] `seed-credentials.ts` idempotente — cria as que faltam, imprime
-  senhas em claro. `--rotate` força nova senha pra todas
+      senhas em claro. `--rotate` força nova senha pra todas
 - [x] Queries: `findCredentialByUsername`, `listCredentialsWithUnits`,
-  `upsertCredential`, `rotateCredential`, `touchLastLogin`,
-  `insertTransportFromWebForm`, `cancelTransportByCreator`,
-  `listTransportsByCreatedByUnit`
+      `upsertCredential`, `rotateCredential`, `touchLastLogin`,
+      `insertTransportFromWebForm`, `cancelTransportByCreator`,
+      `listTransportsByCreatedByUnit`
 - [x] `hashPassword/verifyPassword` (scrypt em node:crypto, zero deps)
 - [x] `generateReadablePassword` — 4 grupos de 3 chars sem ambíguos
 
 ### Auth (jose JWT em cookie httpOnly)
+
 - [x] `lib/auth/session.ts` — sign/verify HS256, 12h TTL, edge-compatível
 - [x] `lib/auth/server.ts` — `getSession`/`requireUnitSession`/`requireAdminSession`
 - [x] `middleware.ts` — protege `/solicitar/*`, `/api/solicitar/*`
-  (sessão unit) e `/`, `/admin/*`, `/api/admin/*`, `/api/transports/*`,
-  `/api/stream` (sessão admin). APIs respondem 401 JSON; UI redireciona
-  pra `/login?next=...`
+      (sessão unit) e `/`, `/admin/*`, `/api/admin/*`, `/api/transports/*`,
+      `/api/stream` (sessão admin). APIs respondem 401 JSON; UI redireciona
+      pra `/login?next=...`
 - [x] `POST /api/auth/login` — discriminated union: `kind: unit`
-  (username+password) ou `kind: admin` (apenas password). `ADMIN_PASSWORD`
-  via env. timingSafeEqual pra senha admin
+      (username+password) ou `kind: admin` (apenas password). `ADMIN_PASSWORD`
+      via env. timingSafeEqual pra senha admin
 - [x] `POST /api/auth/logout`
 
 ### Rotas (RSC + client form)
+
 - [x] `/login` — tabs Unidade / Regulador-Admin, paleta plantoes
 - [x] `/solicitar` — form completo com paciente / destino / procedimento /
-  prazo / tipo / clínica (diagnoses + vitals opcionais) / observações
+      prazo / tipo / clínica (diagnoses + vitals opcionais) / observações
 - [x] `/solicitar/minhas` — cards do histórico com filtros (ativas /
-  concluídas / canceladas / todas), borda lateral colorida por status,
-  fade nos terminais, line-through em cancelados, botão "Cancelar" só
-  pra não-terminais
+      concluídas / canceladas / todas), borda lateral colorida por status,
+      fade nos terminais, line-through em cancelados, botão "Cancelar" só
+      pra não-terminais
 - [x] `/admin` — tabela de unidades × credenciais. "Rotacionar senha"
-  mostra a senha em claro 1x, com botão copiar. Último login por unidade
+      mostra a senha em claro 1x, com botão copiar. Último login por unidade
 - [x] `POST /api/solicitar` — zod validate, insere com source='web_form'
 - [x] `POST /api/solicitar/[id]/cancel` — só o criador, só não-terminal
 - [x] `POST /api/admin/credentials/[unitId]/rotate` — gera + retorna senha
 
 ### Design / paleta
+
 - [x] Tokens do plantoes/app/globals.css importados em `@theme`:
-  `--color-warm-bg`, `--color-warm-bg-deep`, `--color-ice`, `--color-gold`,
-  `--color-warm-green`, `--color-warm-amber`, `--color-warm-red`,
-  `--color-accent-confirm/warn/fraud/info`
+      `--color-warm-bg`, `--color-warm-bg-deep`, `--color-ice`, `--color-gold`,
+      `--color-warm-green`, `--color-warm-amber`, `--color-warm-red`,
+      `--color-accent-confirm/warn/fraud/info`
 - [x] Classes utilitárias `.page-warm`, `.surface-glass`, `.surface-elevated`
-  com gradientes radiais, grão SVG, glassmorphism
+      com gradientes radiais, grão SVG, glassmorphism
 
 ### Config
+
 - [x] `.env.example` documenta `AUTH_SECRET` e `ADMIN_PASSWORD`
 - [x] Root `db:seed:credentials` script
 - [x] `jose`, `zod` adicionados a `apps/web`
 
 ### Pendências antes do deploy
+
 - [ ] PR aberto e merged (após #23)
 - [ ] No EC2: setar `AUTH_SECRET` e `ADMIN_PASSWORD` em `.env.production`
 - [ ] No EC2: rodar `pnpm db:seed:credentials` e distribuir senhas
 
 ### Fora de escopo deste PR (futuras iterações)
+
 - Edição de transporte pelo solicitante após criar (apenas cancelar)
 - Anexos / fotos
 - 2FA / link mágico
@@ -447,7 +522,7 @@ Baileys — desligado em prod a partir do PR #23) · Fase 6 (deploy
    extensionless e funciona com tsx + Next + qualquer futuro bundler. O
    pnpm workspace já resolve `@samu-cru/*` via symlink — não precisa de
    composite/references. Documentado no commit `fix: simplify TS resolution
-   and unblock lint/build` (5522b70).
+and unblock lint/build` (5522b70).
 7. **Sem `eslint-config-next` na flat config.** Next 15 emite warning
    "plugin not detected" no `next build` mas não é erro. Integração da
    eslint-config-next com flat config v9 ainda é desajeitada — entra como
@@ -455,9 +530,11 @@ Baileys — desligado em prod a partir do PR #23) · Fase 6 (deploy
    next-específicas.
 
 ## Próximas fases (PLANNING §15)
+
 ## Como atualizar este WORKLOG
 
 A cada commit relevante:
+
 1. Adicione linha à tabela "Commits desta Fase".
 2. Marque critério de pronto se completo.
 3. Atualize "Resume here" com a próxima ação concreta.

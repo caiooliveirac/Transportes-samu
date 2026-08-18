@@ -41,8 +41,8 @@ const TRANSPORT_HINTS: ReadonlyArray<RegExp> = [
   /🚑/,
 ];
 
-const MIN_LENGTH = 30;
-const MIN_HITS = 3;
+export const MIN_LENGTH = 30;
+export const MIN_HITS = 3;
 
 export interface FilterVerdict {
   pass: boolean;
@@ -50,7 +50,15 @@ export interface FilterVerdict {
   hits: number;
 }
 
-export function looksLikeTransport(text: string): FilterVerdict {
+/**
+ * `minHits` existe para o `ingest:replay --min-hits N` medir, sobre o corpus
+ * já gravado, o que aconteceria com outro limiar — sem editar código nem
+ * mexer em produção. Em runtime o worker sempre usa o default.
+ */
+export function looksLikeTransport(
+  text: string,
+  minHits: number = MIN_HITS,
+): FilterVerdict {
   if (text.length < MIN_LENGTH) {
     return { pass: false, reason: `too short (${text.length} chars)`, hits: 0 };
   }
@@ -58,8 +66,8 @@ export function looksLikeTransport(text: string): FilterVerdict {
   for (const rx of TRANSPORT_HINTS) {
     if (rx.test(text)) hits += 1;
   }
-  if (hits < MIN_HITS) {
-    return { pass: false, reason: `not enough hints (${hits}/${MIN_HITS})`, hits };
+  if (hits < minHits) {
+    return { pass: false, reason: `not enough hints (${hits}/${minHits})`, hits };
   }
   return { pass: true, reason: `${hits} hints matched`, hits };
 }

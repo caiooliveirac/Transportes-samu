@@ -1,8 +1,15 @@
 import { eq, sql } from "drizzle-orm";
 import { parseMessage } from "@samu-cru/parser";
-import { MISSING_DESTINATION, MISSING_PROCEDURE } from "@samu-cru/shared";
+import {
+  MISSING_DESTINATION,
+  MISSING_ORIGIN,
+  MISSING_PROCEDURE,
+  isHumanCorrected,
+  type CorrectableField,
+} from "@samu-cru/shared";
 import {
   db,
+  findTransportsByWhatsappMessage,
   insertTransport,
   schema,
   type WhatsappMessage,
@@ -107,24 +114,37 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
     isNew = false;
   }
 
-  if (!isNew) {
-    baseLog.debug("whatsapp_message already known, skipping transport create");
-    return {
-      created: false,
-      stored: false,
-      whatsappMessageDbId,
-      globalConfidence: 0,
-    };
-  }
+  const skipped = (): IngestResult => ({
+    created: false,
+    stored: isNew,
+    whatsappMessageDbId,
+    globalConfidence: 0,
+  });
 
   if (!input.createTransport) {
     baseLog.debug("message stored for corpus only (filtro não passou)");
-    return {
-      created: false,
-      stored: true,
-      whatsappMessageDbId,
-      globalConfidence: 0,
-    };
+    return skipped();
+  }
+
+  // O portão é "esta mensagem já tem transporte?", não "acabei de gravar a
+  // mensagem?". As duas perguntas parecem a mesma e não são: a mensagem é
+  // gravada ANTES de o parser rodar, então uma falha no insert do transporte
+  // deixava a linha de `whatsapp_messages` no banco sem transporte — e o
+  // reenvio do gateway caía em "já conheço esta mensagem" e respondia 200
+  // sem criar nada. Perguntando pelo transporte linkado, o reenvio se cura
+  // sozinho e duplicata continua sendo recusada.
+  //
+  // Mensagem recém-inserida não pode ter transporte linkado; só consulta
+  // quando ela já existia.
+  if (!isNew) {
+    const linked = await findTransportsByWhatsappMessage(whatsappMessageDbId);
+    if (linked.length > 0) {
+      baseLog.debug("transport already linked to this message, skipping create");
+      return skipped();
+    }
+    baseLog.info(
+      "mensagem já gravada e sem transporte linkado — criando agora (retry pós-falha)",
+    );
   }
 
   // 2. Parser + insert (compartilhado com o backfill)
@@ -136,7 +156,7 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
 
   return {
     created: created.transportId !== null,
-    stored: true,
+    stored: isNew,
     whatsappMessageDbId,
     transportId: created.transportId ?? undefined,
     globalConfidence: created.globalConfidence,
@@ -198,7 +218,8 @@ export async function createTransportFromMessage(params: {
     patientCns: parsed.patientCns.value,
     patientCpf: parsed.patientCpf.value,
     originUnitId: originResolved?.id ?? null,
-    originUnitRaw: parsed.originUnitCode.value ?? parsed.originUnitCode.raw ?? "—",
+    originUnitRaw:
+      parsed.originUnitCode.value ?? parsed.originUnitCode.raw ?? MISSING_ORIGIN,
     destinationName: parsed.destination.value ?? MISSING_DESTINATION,
     procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
     procedureTime: parsed.procedureTimeText.value,
@@ -279,12 +300,24 @@ export async function handleMessageEdit(
  * O que NÃO faz: mexer no status de um caso que o regulador já moveu. O
  * único avanço permitido é `pendente_revisao` → `novo`, quando o parser
  * novo preencheu o que faltava.
+ *
+ * O que também NÃO faz: sobrescrever campo que um regulador corrigiu à mão.
+ * A correção manual e o re-parse escrevem nas MESMAS colunas, e este comando
+ * é rodado justamente depois de melhorar o parser — que é quando há mais
+ * correção acumulada para perder. `corrected_fields` diz de quem é cada
+ * valor; o que é humano fica de fora do UPDATE.
  */
 export async function reparseTransportFromMessage(params: {
   whatsappMessageDbId: number;
   rawText: string;
   receivedAt: Date;
-}): Promise<{ updated: number; globalConfidence: number; promoted: boolean }> {
+}): Promise<{
+  updated: number;
+  globalConfidence: number;
+  promoted: boolean;
+  /** Campos que ficaram de fora por serem correção humana. */
+  preserved: CorrectableField[];
+}> {
   const parsed = parseMessage({
     rawText: params.rawText,
     receivedAt: params.receivedAt,
@@ -295,17 +328,36 @@ export async function reparseTransportFromMessage(params: {
     : null;
 
   const existing = await db
-    .select({ id: schema.transportRequests.id, status: schema.transportRequests.status })
+    .select({
+      id: schema.transportRequests.id,
+      status: schema.transportRequests.status,
+      correctedFields: schema.transportRequests.correctedFields,
+    })
     .from(schema.transportRequests)
     .where(eq(schema.transportRequests.whatsappMessageId, params.whatsappMessageDbId));
 
   const promote =
     parsed.suggestedStatus === "novo" &&
+    existing.length > 0 &&
     existing.every((t) => t.status === "pendente_revisao");
 
-  const rows = await db
-    .update(schema.transportRequests)
-    .set({
+  // Um UPDATE por transporte, e não um em massa: `corrected_fields` é por
+  // linha — um dos gêmeos pode ter tido o destino corrigido e o outro não.
+  // Numa transação porque o UPDATE em massa que havia antes era atômico, e
+  // uma falha no meio do laço deixaria gêmeos em estados diferentes com os
+  // contadores impressos descrevendo meia execução.
+  const preserved = new Set<CorrectableField>();
+  let updated = 0;
+
+  await db.transaction(async (tx) => {
+  for (const row of existing) {
+    const owned = (f: CorrectableField): boolean => {
+      const human = isHumanCorrected(row.correctedFields, f);
+      if (human) preserved.add(f);
+      return human;
+    };
+
+    const values: Record<string, unknown> = {
       patientName: parsed.patientName.value ?? "(sem nome)",
       patientAgeText: parsed.patientAgeYears.value
         ? `${parsed.patientAgeYears.value}a`
@@ -315,26 +367,49 @@ export async function reparseTransportFromMessage(params: {
         : null,
       patientCns: parsed.patientCns.value,
       patientCpf: parsed.patientCpf.value,
-      originUnitId: originResolved?.id ?? null,
-      originUnitRaw: parsed.originUnitCode.value ?? "—",
-      destinationName: parsed.destination.value ?? MISSING_DESTINATION,
-      procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
       procedureTime: parsed.procedureTimeText.value,
       deadlineAt: parsed.deadlineAt.value,
-      tripType: parsed.tripType.value ?? "unknown",
       vitals: parsed.vitals.value ?? null,
       diagnoses: parsed.diagnoses.value ?? null,
       ...(promote ? { status: "novo" as const } : {}),
       parseConfidence: parsed.globalConfidence,
       parseWarnings: parsed.warnings.length > 0 ? parsed.warnings : null,
       updatedAt: new Date(),
-    })
-    .where(eq(schema.transportRequests.whatsappMessageId, params.whatsappMessageDbId))
-    .returning({ id: schema.transportRequests.id });
+    };
+
+    if (!owned("originUnitRaw")) {
+      values.originUnitId = originResolved?.id ?? null;
+      // Mesmo fallback da criação: o trecho cru é a única pista do que o
+      // parser leu, e é ele que a gaveta mostra para o regulador escolher a
+      // unidade certa. Trocá-lo pelo travessão aqui apagaria essa pista em
+      // massa a cada `--reparse`.
+      values.originUnitRaw =
+        parsed.originUnitCode.value ?? parsed.originUnitCode.raw ?? MISSING_ORIGIN;
+    }
+    if (!owned("destinationName")) {
+      values.destinationName = parsed.destination.value ?? MISSING_DESTINATION;
+    }
+    // `trip_type` é derivado do procedimento, então acompanha o dono dele:
+    // senão um procedimento corrigido à mão ficaria com o tipo de viagem do
+    // procedimento antigo.
+    if (!owned("procedure")) {
+      values.procedure = parsed.procedure.value ?? MISSING_PROCEDURE;
+      values.tripType = parsed.tripType.value ?? "unknown";
+    }
+
+    const done = await tx
+      .update(schema.transportRequests)
+      .set(values)
+      .where(eq(schema.transportRequests.id, row.id))
+      .returning({ id: schema.transportRequests.id });
+    updated += done.length;
+  }
+  });
 
   return {
-    updated: rows.length,
+    updated,
     globalConfidence: parsed.globalConfidence,
-    promoted: promote && rows.length > 0,
+    promoted: promote && updated > 0,
+    preserved: [...preserved],
   };
 }

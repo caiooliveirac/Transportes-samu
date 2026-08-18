@@ -21,6 +21,7 @@ import {
 import {
   DEADLINE_KIND_LABEL,
   MISSING_DESTINATION,
+  MISSING_ORIGIN,
   MISSING_PROCEDURE,
   STATUS,
   UNITS,
@@ -29,8 +30,10 @@ import {
   deadlineKind,
   deriveSeverity,
   formatWait,
+  isOriginResolved,
   waitMinutes,
   waitTone,
+  type CorrectableField,
   type Severity,
   type TripType,
 } from "@samu-cru/shared";
@@ -274,10 +277,17 @@ function DetailBody({
 
         <Section label="Rota">
           <div className="flex flex-col gap-2 rounded-md bg-white/[0.02] p-3 ring-1 ring-inset ring-white/5">
-            <div className="flex items-center gap-2 text-[12.5px] text-zinc-200">
-              <MapPin className="h-3.5 w-3.5 text-sky-400" />
-              {originShort}
-            </div>
+            <CorrectableField
+              transportId={transport.id}
+              field="originUnitRaw"
+              value={transport.originUnitRaw}
+              display={originShort}
+              placeholder={MISSING_ORIGIN}
+              label="Unidade de origem"
+              onSaved={onPatch}
+              icon={<MapPin className="h-3.5 w-3.5 text-sky-400" />}
+              className="text-[12.5px] text-zinc-200"
+            />
             <div className="flex items-center gap-2 pl-1 text-[11px] text-zinc-500">
               <TripIcon className="h-3 w-3" />
               {tripLabel}
@@ -517,6 +527,7 @@ function CorrectableField({
   transportId,
   field,
   value,
+  display,
   placeholder,
   label,
   icon,
@@ -524,15 +535,20 @@ function CorrectableField({
   onSaved,
 }: {
   transportId: string;
-  field: "destinationName" | "procedure";
+  field: CorrectableField;
   value: string;
+  /** O que mostrar em leitura, quando difere do valor cru (código → nome). */
+  display?: string;
   placeholder: string;
   label: string;
   icon?: React.ReactNode;
   className?: string;
   onSaved: (patch: Partial<SerializedTransport>) => void;
 }) {
-  const missing = value === placeholder;
+  // Origem é escolha fechada: o valor é a chave da coluna do painel, e
+  // qualquer outra coisa devolve o card ao limbo de onde ele veio.
+  const isUnitPicker = field === "originUnitRaw";
+  const missing = isUnitPicker ? !isOriginResolved(value) : value === placeholder;
   const [editing, setEditing] = useState(missing);
   const [draft, setDraft] = useState(missing ? "" : value);
   const [saving, setSaving] = useState(false);
@@ -551,7 +567,10 @@ function CorrectableField({
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const body = (await r.json()) as { transport: SerializedTransport };
-      onSaved({ [field]: next, tripType: body.transport?.tripType });
+      // Usa o transporte que voltou do servidor: além do campo, ele pode ter
+      // mexido em `origin_unit_id` e `corrected_fields`, que a tela não tem
+      // como derivar sozinha.
+      onSaved(body.transport ?? { [field]: next });
       setEditing(false);
     } catch (err) {
       console.error("[detail-sheet] correction failed:", err);
@@ -565,7 +584,7 @@ function CorrectableField({
     return (
       <div className="group flex items-center gap-2">
         {icon}
-        <span className={className}>{value}</span>
+        <span className={className}>{display ?? value}</span>
         <button
           type="button"
           onClick={() => setEditing(true)}
@@ -582,22 +601,39 @@ function CorrectableField({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
         {icon}
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void save();
-            if (e.key === "Escape") {
-              setEditing(false);
-              setDraft(missing ? "" : value);
-            }
-          }}
-          autoFocus={missing}
-          maxLength={200}
-          placeholder={label}
-          aria-label={label}
-          className="bg-ink-50 min-w-0 flex-1 rounded-md px-2 py-1 text-[12.5px] text-zinc-100 ring-1 ring-inset ring-white/10 outline-none focus:ring-sky-500/50"
-        />
+        {isUnitPicker ? (
+          <select
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            autoFocus={missing}
+            aria-label={label}
+            className="bg-ink-50 min-w-0 flex-1 rounded-md px-2 py-1 text-[12.5px] text-zinc-100 ring-1 ring-inset ring-white/10 outline-none focus:ring-sky-500/50"
+          >
+            <option value="">Selecione a unidade…</option>
+            {UNITS.map((u) => (
+              <option key={u.code} value={u.code}>
+                {u.short}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void save();
+              if (e.key === "Escape") {
+                setEditing(false);
+                setDraft(missing ? "" : value);
+              }
+            }}
+            autoFocus={missing}
+            maxLength={200}
+            placeholder={label}
+            aria-label={label}
+            className="bg-ink-50 min-w-0 flex-1 rounded-md px-2 py-1 text-[12.5px] text-zinc-100 ring-1 ring-inset ring-white/10 outline-none focus:ring-sky-500/50"
+          />
+        )}
         <Button
           size="sm"
           variant="ghost"
@@ -610,8 +646,17 @@ function CorrectableField({
       </div>
       {missing && (
         <p className="text-[11px] text-amber-300/80">
-          O parser não entendeu este campo. O que você escrever aqui fica
-          gravado.
+          {isUnitPicker
+            ? "O parser não reconheceu a unidade, e por isso este caso não aparece em nenhuma coluna do painel. Informar aqui o coloca na coluna certa."
+            : "O parser não entendeu este campo. O que você escrever aqui fica gravado."}
+        </p>
+      )}
+      {/* O trecho que o parser leu e não soube casar é a única pista na tela
+          para escolher a unidade — sem ele o regulador escolhe às cegas ou
+          precisa abrir o texto bruto. */}
+      {isUnitPicker && missing && value !== MISSING_ORIGIN && (
+        <p className="text-[11px] text-zinc-500">
+          O parser leu: <span className="font-mono text-zinc-400">{value}</span>
         </p>
       )}
       {error && <p className="text-[11px] text-rose-300">{error}</p>}

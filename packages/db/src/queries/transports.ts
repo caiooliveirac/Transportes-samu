@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import {
+  mergeCorrectedFields,
   ambulanceKindFromLabel,
   statusAfterAssign,
   DELAY_REASON_META,
   type AmbulanceKind,
+  type CorrectableField,
   type DelayReason,
   type Severity,
   type TransportStatus,
@@ -340,6 +342,12 @@ export async function setTransportSeverity(
 export interface ParsedFieldCorrection {
   destinationName?: string;
   procedure?: string;
+  /**
+   * Código de unidade (`units.code`). É a chave da coluna do painel — o
+   * transporte cuja origem o parser não reconheceu não aparece em unidade
+   * nenhuma, e é preenchendo isto que ele sai do limbo.
+   */
+  originUnitRaw?: string;
   /** Recalculado a partir do procedimento corrigido; ausente = não mexe. */
   tripType?: TripType;
 }
@@ -362,7 +370,9 @@ export async function correctTransportFields(
     .select({
       destinationName: transportRequests.destinationName,
       procedure: transportRequests.procedure,
+      originUnitRaw: transportRequests.originUnitRaw,
       tripType: transportRequests.tripType,
+      correctedFields: transportRequests.correctedFields,
     })
     .from(transportRequests)
     .where(eq(transportRequests.id, transportId))
@@ -372,9 +382,40 @@ export async function correctTransportFields(
   const next: Partial<typeof transportRequests.$inferInsert> = {
     updatedAt: new Date(),
   };
-  if (patch.destinationName !== undefined) next.destinationName = patch.destinationName;
-  if (patch.procedure !== undefined) next.procedure = patch.procedure;
+  const corrected: CorrectableField[] = [];
+  if (patch.destinationName !== undefined) {
+    next.destinationName = patch.destinationName;
+    corrected.push("destinationName");
+  }
+  if (patch.procedure !== undefined) {
+    next.procedure = patch.procedure;
+    corrected.push("procedure");
+  }
+  if (patch.originUnitRaw !== undefined) {
+    // A unidade tem de existir NA TABELA, não só na constante `UNITS`. Com
+    // seed defasado, aceitar o código deixaria `origin_unit_id` nulo e o card
+    // seguiria órfão — agora sem sinal nenhum disso, porque o campo passaria
+    // a contar como resolvido por humano.
+    const [unit] = await db
+      .select({ id: units.id })
+      .from(units)
+      .where(eq(units.code, patch.originUnitRaw))
+      .limit(1);
+    if (!unit) {
+      throw new Error(
+        `unidade "${patch.originUnitRaw}" não existe na tabela units — seed defasado?`,
+      );
+    }
+    next.originUnitRaw = patch.originUnitRaw;
+    next.originUnitId = unit.id;
+    corrected.push("originUnitRaw");
+  }
   if (patch.tripType !== undefined) next.tripType = patch.tripType;
+
+  // Marca de dono. Sem ela o `--reparse` sobrescreve isto na próxima vez que
+  // alguém melhorar o parser — que é exatamente quando há mais correção
+  // acumulada para perder.
+  next.correctedFields = mergeCorrectedFields(current.correctedFields, corrected);
 
   const [updated] = await db
     .update(transportRequests)

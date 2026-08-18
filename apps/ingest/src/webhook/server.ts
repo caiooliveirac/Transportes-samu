@@ -3,7 +3,7 @@ import http from "node:http";
 import { ENV } from "../env";
 import { logger } from "../logger";
 import { isFromAllowedChat, looksLikeTransport } from "../pipeline/filter";
-import { markSeen, wasSeen } from "../pipeline/dedupe";
+import { markSeen, unmarkSeen, wasSeen } from "../pipeline/dedupe";
 import { handleMessageEdit, ingestMessage } from "../pipeline/ingest";
 import {
   EVENT_MESSAGE_EDITED,
@@ -109,20 +109,31 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
     );
   }
 
-  const result = await ingestMessage({
-    waMessageId: msg.messageId,
-    waChatId: msg.chatId,
-    waSenderId: msg.senderId,
-    rawText: msg.text,
-    rawJson: {
-      senderName: msg.senderName,
-      event: msg.event,
-      source: "whatsmeow-gw",
-      filterVerdict: verdict,
-    },
-    receivedAt: msg.receivedAt,
-    createTransport: verdict.pass,
-  });
+  // A marca de `markSeen` acima é otimista e tem de ser desfeita se a
+  // ingestão falhar: sem isso, o reenvio do gateway cai em `already_seen`,
+  // responde 200, e o transporte nunca é criado — uma falha pós-insert (o
+  // overflow de coluna que já aconteceu, uma queda de conexão) virava perda
+  // definitiva e silenciosa.
+  let result;
+  try {
+    result = await ingestMessage({
+      waMessageId: msg.messageId,
+      waChatId: msg.chatId,
+      waSenderId: msg.senderId,
+      rawText: msg.text,
+      rawJson: {
+        senderName: msg.senderName,
+        event: msg.event,
+        source: "whatsmeow-gw",
+        filterVerdict: verdict,
+      },
+      receivedAt: msg.receivedAt,
+      createTransport: verdict.pass,
+    });
+  } catch (err) {
+    unmarkSeen(msg.messageId);
+    throw err;
+  }
 
   return {
     stored: result?.stored ?? false,

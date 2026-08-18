@@ -16,7 +16,9 @@
  *
  * O re-parse não mexe em status de caso que o regulador já moveu; o único
  * avanço é `pendente_revisao` → `novo` quando o parser preencheu o que
- * faltava.
+ * faltava. Também não sobrescreve campo corrigido à mão — ele imprime o que
+ * preservou, porque é justamente depois de melhorar o parser que há mais
+ * correção acumulada para perder.
  *
  * Respeita DRY_RUN do ambiente: com DRY_RUN=true nada é escrito mesmo com
  * --aplicar (o próprio `createTransportFromMessage` recusa).
@@ -98,9 +100,14 @@ async function main(): Promise<void> {
         rawText: r.rawText,
         receivedAt: r.receivedAt,
       });
+      const preservados =
+        res.preserved.length > 0
+          ? ` · preservou correção manual: ${res.preserved.join(", ")}`
+          : "";
       console.log(
         `\n── #${r.id} · ${quando} · ${res.updated} atualizado(s)` +
-          ` · conf=${res.globalConfidence}${res.promoted ? " · promovido a novo" : ""}\n${resumo}`,
+          ` · conf=${res.globalConfidence}${res.promoted ? " · promovido a novo" : ""}` +
+          `${preservados}\n${resumo}`,
       );
       continue;
     }

@@ -142,7 +142,8 @@ export const transportRequests = pgTable(
     ),
 
     // Paciente
-    patientName: varchar("patient_name", { length: 200 }).notNull(),
+    /** Ver nota de largura em `origin_unit_raw`. */
+    patientName: text("patient_name").notNull(),
     patientBirthDate: date("patient_birth_date"),
     patientAgeText: varchar("patient_age_text", { length: 32 }),
     patientCns: varchar("patient_cns", { length: 32 }),
@@ -150,8 +151,21 @@ export const transportRequests = pgTable(
 
     // Rota
     originUnitId: integer("origin_unit_id").references(() => units.id),
-    originUnitRaw: varchar("origin_unit_raw", { length: 200 }).notNull(),
-    destinationName: varchar("destination_name", { length: 200 }).notNull(),
+    /**
+     * Chave da coluna do painel quando o parser reconhece a unidade (guarda
+     * o `units.code`), e `MISSING_ORIGIN` quando não reconhece.
+     *
+     * Era varchar(200). No caminho de falha o valor vinha de uma linha
+     * arbitrária da mensagem, sem teto de tamanho — mesma armadilha que já
+     * estourou o INSERT em `procedure_time` (ver nota abaixo). E como a
+     * mensagem é gravada ANTES de o parser rodar, o estouro acontecia com a
+     * linha de `whatsapp_messages` já no banco: o gateway reenviava, o
+     * reenvio caía em "já conheço esta mensagem" e o transporte nunca era
+     * criado. Promovido para text.
+     */
+    originUnitRaw: text("origin_unit_raw").notNull(),
+    /** Ver nota de largura em `origin_unit_raw`. */
+    destinationName: text("destination_name").notNull(),
 
     // Origem da solicitação
     /** 'whatsapp' (legado), 'web_form' (solicitante UPA), 'manual' (regulador) */
@@ -200,6 +214,13 @@ export const transportRequests = pgTable(
      * caso que some da fila se ninguém marcar.
      */
     pickupNeeded: boolean("pickup_needed").notNull().default(false),
+    /**
+     * Campos cujo valor foi escrito por um regulador, não pelo parser. O
+     * re-parse (`ingest:backfill --reparse`) pula estes — sem isso ele
+     * sobrescreve em massa toda correção manual, e é rodado justamente
+     * quando há mais correção acumulada. Ver `@samu-cru/shared/corrections`.
+     */
+    correctedFields: text("corrected_fields").array(),
     parseConfidence: real("parse_confidence").notNull().default(1.0),
     parseWarnings: text("parse_warnings").array(),
     notes: text("notes"),

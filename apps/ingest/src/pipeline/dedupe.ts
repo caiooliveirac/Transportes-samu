@@ -28,6 +28,16 @@ export function wasSeen(messageId: string): boolean {
   return seen.has(messageId);
 }
 
+/**
+ * Desmarca. A marca é otimista — posta antes de ingerir, para barrar
+ * entrega concorrente duplicada. Se a ingestão falhar ela precisa sair, ou
+ * o reenvio do gateway (até 5x, que existe para exatamente esse caso) morre
+ * em `already_seen` sem nunca criar o transporte que faltou.
+ */
+export function unmarkSeen(messageId: string): void {
+  seen.delete(messageId);
+}
+
 /** Test-only helper. */
 export function _resetForTests(): void {
   seen.clear();

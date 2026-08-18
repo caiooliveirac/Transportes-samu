@@ -8,6 +8,7 @@ import { inferTripType } from "@samu-cru/parser";
 import {
   AMBULANCE_KIND,
   TRANSPORT_STATUS,
+  UNITS,
   type AmbulanceKind,
   type TransportStatus,
 } from "@samu-cru/shared";
@@ -15,6 +16,8 @@ import { getSession } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const UNIT_CODES = new Set(UNITS.map((u) => u.code));
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -52,7 +55,7 @@ export async function PUT(req: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  let body: { destinationName?: string; procedure?: string };
+  let body: { destinationName?: string; procedure?: string; originUnitRaw?: string };
   try {
     body = await req.json();
   } catch {
@@ -61,13 +64,20 @@ export async function PUT(req: Request, { params }: Params) {
 
   const destinationName = body.destinationName?.trim();
   const procedure = body.procedure?.trim();
-  if (!destinationName && !procedure) {
+  const originUnitRaw = body.originUnitRaw?.trim();
+  if (!destinationName && !procedure && !originUnitRaw) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
   for (const v of [destinationName, procedure]) {
     if (v !== undefined && (v.length < 2 || v.length > 200)) {
       return NextResponse.json({ error: "Invalid value" }, { status: 400 });
     }
+  }
+  // Origem não é texto livre: é a chave da coluna do painel. Aceitar
+  // qualquer string aqui recriaria o card sem coluna que esta correção
+  // existe para resolver.
+  if (originUnitRaw !== undefined && !UNIT_CODES.has(originUnitRaw)) {
+    return NextResponse.json({ error: "Invalid originUnitRaw" }, { status: 400 });
   }
 
   try {
@@ -76,6 +86,7 @@ export async function PUT(req: Request, { params }: Params) {
       {
         destinationName,
         procedure,
+        originUnitRaw,
         tripType: procedure ? (inferTripType(procedure).value ?? undefined) : undefined,
       },
       session.userId,

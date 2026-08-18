@@ -37,10 +37,10 @@ não pede QR e não tem pasta `auth/`.
   "event": "message",
   "device_id": "…",
   "payload": {
-    "id": "3EB0…",                              // → wa_message_id (UNIQUE)
+    "id": "3EB0…", // → wa_message_id (UNIQUE)
     "timestamp": "2026-08-14T02:25:34Z",
     "is_from_me": false,
-    "chat_id": "557181082189-1589997108@g.us",  // → whitelist
+    "chat_id": "557181082189-1589997108@g.us", // → whitelist
     "from": "557181469133@s.whatsapp.net",
     "from_name": "Regulação UPA SANTO ANTONIO",
     "body": "texto da solicitação"
@@ -62,9 +62,17 @@ repetir é inofensivo.
 `GET /` é health check e contador:
 
 ```json
-{"status":"ok","worker":"magalu-prod-1","received":12,"stored":5,"ingested":3,
- "skipped":7,"mediaOnly":4,"rejected":0,
- "lastWebhookAt":"2026-08-14T07:31:02.114Z"}
+{
+  "status": "ok",
+  "worker": "magalu-prod-1",
+  "received": 12,
+  "stored": 5,
+  "ingested": 3,
+  "skipped": 7,
+  "mediaOnly": 4,
+  "rejected": 0,
+  "lastWebhookAt": "2026-08-14T07:31:02.114Z"
+}
 ```
 
 `lastWebhookAt` avança em **qualquer** POST autenticado (inclusive ack e
@@ -97,18 +105,45 @@ pnpm ingest:corpus 100 --texto        # texto inteiro, sem truncar
 Isso imprime texto clínico real (nome, CNS, CPF). Terminal seu — não colar
 a saída em issue, chat ou documento.
 
+## `ingest:replay` — quanto o parser está acertando
+
+O `corpus` mostra o texto e o veredito do filtro; o `backfill` age. Faltava a
+medida: **de tudo que o grupo mandou, quanto o parser acerta, e quanto disso
+vira card visível?** Sem ela, "melhorou" fica no olhômetro de quem leu algumas
+mensagens.
+
+O `replay` roda filtro **e** parser sobre o corpus, sem escrever nada, e
+recalcula o veredito com o código de hoje — não com o que ficou congelado em
+`raw_json.filterVerdict`. O parser roda inclusive na mensagem barrada, que é
+onde se vê se o filtro está jogando fora coisa que o parser saberia ler.
+
+```bash
+pnpm ingest:replay                    # últimas 30, campo a campo
+pnpm ingest:replay 100 --rejeitadas   # só o que o filtro barra
+pnpm ingest:replay 100 --min-hits 2   # simula outro limiar, sem editar código
+pnpm ingest:replay 100 --resumo       # só o agregado — SEM dado de paciente
+```
+
+`--resumo` é a única saída colável: acerto por campo, quantos cards ficariam
+sem coluna, distribuição de status e tipo de viagem. Rodar antes e depois de
+mexer em extrator é o que mostra se a mudança valeu.
+
+Uma linha do resumo merece atenção: **sem coluna**. É o transporte cuja origem
+o parser não reconheceu — ele existe no banco e vai para o balde "Origem não
+identificada" do painel, esperando alguém informar a unidade na gaveta.
+
 ## Env
 
-| Variável | Default | Para quê |
-|---|---|---|
-| `DATABASE_URL` | — (obrigatória) | Postgres |
-| `WORKER_ID` | `local-dev` | linha em `worker_heartbeat` |
-| `WA_WEBHOOK_PORT` | `3082` | porta do webhook |
-| `WA_WEBHOOK_HOST` | `0.0.0.0` | interface de bind; `127.0.0.1` não é alcançável pelo container |
-| `WA_WEBHOOK_SECRET` | `secret` | HMAC; vazio desliga a checagem — o worker recusa subir se o bind não for loopback |
-| `WA_ALLOWED_CHATS` | vazio | JIDs separados por vírgula; vazio = todo `@g.us`. Define o que entra no corpus |
-| `DRY_RUN` | `false` | parseia e loga, não escreve transporte |
-| `LOG_LEVEL` | `info` | |
+| Variável            | Default         | Para quê                                                                          |
+| ------------------- | --------------- | --------------------------------------------------------------------------------- |
+| `DATABASE_URL`      | — (obrigatória) | Postgres                                                                          |
+| `WORKER_ID`         | `local-dev`     | linha em `worker_heartbeat`                                                       |
+| `WA_WEBHOOK_PORT`   | `3082`          | porta do webhook                                                                  |
+| `WA_WEBHOOK_HOST`   | `0.0.0.0`       | interface de bind; `127.0.0.1` não é alcançável pelo container                    |
+| `WA_WEBHOOK_SECRET` | `secret`        | HMAC; vazio desliga a checagem — o worker recusa subir se o bind não for loopback |
+| `WA_ALLOWED_CHATS`  | vazio           | JIDs separados por vírgula; vazio = todo `@g.us`. Define o que entra no corpus    |
+| `DRY_RUN`           | `false`         | parseia e loga, não escreve transporte                                            |
+| `LOG_LEVEL`         | `info`          |                                                                                   |
 
 ## Rodar local
 

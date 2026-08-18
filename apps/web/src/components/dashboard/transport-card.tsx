@@ -48,6 +48,12 @@ interface Props {
   now: Date;
   index: number;
   total: number;
+  /**
+   * `false` esconde as setas e desliga o arrasto. A ordem manual é
+   * persistida POR COLUNA de unidade; card sem coluna não tem onde guardá-la,
+   * e um controle que parece vivo e não faz nada é pior que a ausência dele.
+   */
+  reorderable?: boolean;
   onSelect: (id: string) => void;
   onMove: (id: string, dir: -1 | 1) => void;
   drag: {
@@ -63,6 +69,7 @@ export function TransportCard({
   now,
   index,
   total,
+  reorderable = true,
   onSelect,
   onMove,
   drag,
@@ -99,7 +106,7 @@ export function TransportCard({
 
   return (
     <div
-      draggable
+      draggable={reorderable}
       onDragStart={(e) => {
         drag.onDragStart(transport.id);
         e.dataTransfer.effectAllowed = "move";
@@ -249,6 +256,7 @@ export function TransportCard({
         </div>
       </button>
 
+      {reorderable && (
       <div className="flex w-5 shrink-0 flex-col items-center justify-center gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100">
         <button
           type="button"
@@ -269,6 +277,7 @@ export function TransportCard({
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </div>
+      )}
     </div>
   );
 }

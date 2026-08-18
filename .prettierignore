@@ -6,6 +6,9 @@ coverage/
 .turbo/
 .cache/
 drizzle/
+# drizzle-kit escreve aqui (out: "./migrations" no drizzle.config.ts) e não
+# formata a saída; sem esta linha todo db:generate vira churn no diff.
+packages/db/migrations/
 pnpm-lock.yaml
 design-refs/
 *.tsbuildinfo

@@ -6,14 +6,16 @@
 // /api/transports/reorder.
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Zap } from "lucide-react";
+import { TriangleAlert, Zap } from "lucide-react";
 import { PRIORITY_UNIT_CODES, UNITS } from "@samu-cru/shared";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DashboardHeader, type FilterId } from "./header";
 import { UnitCard } from "./unit-card";
+import { TransportCard } from "./transport-card";
 import { DetailSheet } from "./detail-sheet";
 import { stripAccents } from "@/lib/format-internal";
+import { bucketByUnit } from "@/lib/group-by-unit";
 import type {
   DashboardData,
   SerializedTransport,
@@ -65,6 +67,15 @@ function isToday(iso: string | null, refIso: string): boolean {
     d.getDate() === r.getDate()
   );
 }
+
+/** Card sem coluna não reordena: a ordem persistida é por unidade. */
+const NOOP_MOVE = () => {};
+const NO_DRAG = {
+  draggingId: null,
+  onDragStart: () => {},
+  onDragEnter: () => {},
+  onDragEnd: () => {},
+};
 
 const GRID =
   "grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]";
@@ -133,13 +144,13 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
     return { active, urgent, overdue, pending };
   }, [data.transports, now]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, SerializedTransport[]>();
-    for (const u of data.units) map.set(u.code, []);
-    for (const t of filtered) {
-      const list = map.get(t.originUnitRaw);
-      if (list) list.push(t);
-    }
+  // `unresolved` são os transportes cuja origem o parser não reconheceu —
+  // sem coluna a que pertencer. Ver `bucketByUnit`.
+  const { grouped, unresolved } = useMemo(() => {
+    const { columns: map, unresolved: orphans } = bucketByUnit(
+      data.units.map((u) => u.code),
+      filtered,
+    );
     for (const [code, list] of map) {
       const order = localOrder[code];
       if (order) {
@@ -164,7 +175,8 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
         });
       }
     }
-    return map;
+    orphans.sort(sortByUrgency);
+    return { grouped: map, unresolved: orphans };
   }, [filtered, data.units, localOrder, sortByUrgency]);
 
   const byLoad = useCallback(
@@ -298,6 +310,40 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
               </div>
               <div className={GRID}>
                 {priorityUnits.map((u) => renderUnit(u, true))}
+              </div>
+            </section>
+          )}
+
+          {unresolved.length > 0 && (
+            <section className="mb-4">
+              <div className="mb-2 flex items-center gap-2">
+                <TriangleAlert className="h-3 w-3 text-amber-400" />
+                <h2 className="text-[12px] font-semibold tracking-[0.12em] text-amber-300/90 uppercase whitespace-nowrap">
+                  Origem não identificada
+                </h2>
+                <span className="hidden text-[11px] whitespace-nowrap text-zinc-500 sm:inline">
+                  o parser não reconheceu a unidade — abra o card e informe
+                </span>
+                <div className="h-px flex-1 bg-gradient-to-r from-amber-500/30 to-transparent" />
+              </div>
+              <div className={GRID}>
+                <section className="bg-ink-100 rounded-lg p-2 ring-1 ring-inset ring-amber-500/20">
+                  <div className="flex flex-col gap-1.5">
+                    {unresolved.map((t, i) => (
+                      <TransportCard
+                        key={t.id}
+                        transport={t}
+                        now={now}
+                        index={i}
+                        total={unresolved.length}
+                        onSelect={setSelectedId}
+                        onMove={NOOP_MOVE}
+                        drag={NO_DRAG}
+                        reorderable={false}
+                      />
+                    ))}
+                  </div>
+                </section>
               </div>
             </section>
           )}
