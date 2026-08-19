@@ -92,6 +92,11 @@ function findTerm(text: string): ProcedureTerm | null {
  * "SUSPEITA DIAGNÓSTICA // PROCEDIMENTO: FEBRE >> DENGUE? // INTERNAÇÃO".
  * O procedimento é o que vem depois do último separador.
  */
+/** Emoji de cabeçalho colado no valor ("🚑 TRANSFERÊNCIA"). */
+function stripLeadingEmoji(val: string): string {
+  return val.replace(/^[^\p{L}\p{N}(]+/u, "").trim();
+}
+
 function afterSeparator(val: string): string {
   // `\` aparece no Hélio Machado ("FRATURA … \ INTERNAÇÃO ORTOPÉDICA").
   const parts = val.split(/\s*(?:\/\/|>>|\\)\s*/);
@@ -125,8 +130,7 @@ function bareLine(seg: Segmented): { value: string; raw: string } | null {
     if (av) return { value: av, raw: line };
     const term = findTerm(line);
     if (term) {
-      const clean = line
-        .trim()
+      const clean = stripLeadingEmoji(line)
         .replace(/^procedimento\s+(de\s+|para\s+)?/i, "")
         .replace(/[.;]+$/, "")
         .trim();
@@ -157,7 +161,7 @@ export function extractProcedure(seg: Segmented): Extracted<string> {
       continue;
     }
 
-    const clean = afterSeparator(val);
+    const clean = stripLeadingEmoji(afterSeparator(val));
     const av = expandAvaliacao(clean);
     return { value: av ?? clean, confidence: 0.95, raw: val };
   }
