@@ -117,3 +117,40 @@ describe("verifySignature", () => {
     expect(verifySignature(body, "sha256=abc", secret)).toBe(false);
   });
 });
+
+/**
+ * `replied_to_id` é a chave que identifica de qual transporte o grupo está
+ * falando quando manda "cancelamento deste apoio". Sem ele sobra chute:
+ * remetente + janela de tempo resolveu 9 de 41 cancelamentos no corpus.
+ */
+describe("resposta citada", () => {
+  it("captura replied_to_id e quoted_body quando a mensagem é resposta", () => {
+    const msg = normalizeWebhook({
+      event: "message",
+      payload: {
+        id: "ABC123",
+        chat_id: "557181082189-1589997108@g.us",
+        body: "Solicito o cancelamento deste apoio",
+        timestamp: "2026-08-18T12:00:00Z",
+        replied_to_id: "ORIG999",
+        quoted_body: "UPA BROTAS SOLICITA APOIO",
+      },
+    });
+    expect(msg?.repliedToId).toBe("ORIG999");
+    expect(msg?.quotedBody).toBe("UPA BROTAS SOLICITA APOIO");
+  });
+
+  it("mensagem que não é resposta traz null nos dois", () => {
+    const msg = normalizeWebhook({
+      event: "message",
+      payload: {
+        id: "ABC124",
+        chat_id: "557181082189-1589997108@g.us",
+        body: "UPA BROTAS SOLICITA APOIO",
+        timestamp: "2026-08-18T12:00:00Z",
+      },
+    });
+    expect(msg?.repliedToId).toBeNull();
+    expect(msg?.quotedBody).toBeNull();
+  });
+});

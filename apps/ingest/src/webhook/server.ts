@@ -5,6 +5,7 @@ import { logger } from "../logger";
 import { isFromAllowedChat, looksLikeTransport } from "../pipeline/filter";
 import { markSeen, wasSeen } from "../pipeline/dedupe";
 import { handleMessageEdit, ingestMessage } from "../pipeline/ingest";
+import { classifyFollowup } from "../pipeline/followup";
 import {
   EVENT_MESSAGE_EDITED,
   normalizeWebhook,
@@ -96,6 +97,20 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
   // (jsonb, sem migration) para dar pra comparar depois o que o filtro
   // achou com o que a mensagem era.
   const verdict = looksLikeTransport(msg.text);
+  // Acompanhamento de caso existente. Ainda não age — grava e loga, para
+  // medir que fração chega como RESPOSTA citada (`replied_to_id`), que é a
+  // única chave que identifica o transporte sem chutar.
+  const followup = verdict.pass ? null : classifyFollowup(msg.text);
+  if (followup) {
+    logger.info(
+      {
+        waMessageId: msg.messageId,
+        intent: followup.intent,
+        hasReply: msg.repliedToId !== null,
+      },
+      "acompanhamento de caso existente",
+    );
+  }
 
   if (verdict.pass) {
     logger.info(
@@ -119,6 +134,9 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
       event: msg.event,
       source: "whatsmeow-gw",
       filterVerdict: verdict,
+      repliedToId: msg.repliedToId,
+      quotedBody: msg.quotedBody,
+      followup,
     },
     receivedAt: msg.receivedAt,
     createTransport: verdict.pass,
