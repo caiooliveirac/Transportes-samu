@@ -1,0 +1,10 @@
+{
+  "receivedAt": "2026-08-17T15:47:00Z",
+  "expect": {
+    "patientName": { "equals": "CARLA TESTE FERREIRA" },
+    "originUnitCode": { "equals": "pa_alfredo_bureau", "minConfidence": 0.8 },
+    "destination": { "includes": "Hospital Municipal" },
+    "procedure": { "includes": "AVALIAÇÃO" },
+    "tripType": { "equals": "round_trip" }
+  }
+}

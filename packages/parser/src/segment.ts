@@ -43,6 +43,7 @@ const LABEL_SYNONYMS: ReadonlyArray<readonly [string, string]> = [
   ["horario da apresentacao", "horario"],
   ["data/horario", "horario"],
   ["recurso solicitado", "procedimento"],
+  ["recurso", "procedimento"],
   ["procedimento/especialidade", "procedimento"],
   ["procedimento / especialidade", "procedimento"],
   ["motivo de solicitacao", "motivo"],
