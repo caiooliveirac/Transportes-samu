@@ -83,6 +83,22 @@ resolvida") a quita. Tudo em `transport_events` (`vehicle_released` /
 elegível. O card troca "limite" por "a partir de" e a gaveta ganha a
 etiqueta.
 
+**Re-parse aplicado em produção (18/08 20:18)**, com backup em
+`~/backups-adhoc/transportes-pre-reparse-20260818-201815.sql.gz`. Sobre os
+131 casos: sem destino **24 → 3**, sem procedimento **22 → 4**, `trip_type`
+unknown **32 → 10**, `pendente_revisao` **44 → 8**, confiança média 0,858.
+36 casos promovidos a `novo`.
+
+Os residuais renderam uma segunda rodada: rótulo conhecido sem dois-pontos
+(`Local Instituto do cérebro`), `RNM`, `CLINICA MEDICA` sozinho como leito
+(one_way) e o typo `INTRNAMENTO`, que existe no corpus e não vale exigir
+ortografia de quem digita com o paciente na maca.
+
+Restam poucos e são de verdade: Pernambués e San Martin mandam só
+diagnóstico, sem campo de procedimento; a ficha de regulação SAMU segue sem
+tratamento; e `IMPLANTE DE VEIA CAVA` ficou `unknown` — falta confirmar com
+o regulador se implante em hemodinâmica é sempre espera.
+
 **Pendente, combinado com o usuário e ainda NÃO implementado:**
 1. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
    HGRS`), 1 caso só até agora; esperar mais antes de codificar

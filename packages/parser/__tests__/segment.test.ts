@@ -23,4 +23,12 @@ describe("segment", () => {
     const seg = segment("Tipo - ida e volta");
     expect(seg.labels.get("tipo")).toBe("ida e volta");
   });
+
+  it("aceita rótulo conhecido sem dois-pontos", () => {
+    // Santo Inácio escreve o destino assim, sem pontuação nenhuma.
+    const seg = segment("Local Instituto do cérebro\nAmbulância básica");
+    expect(seg.labels.get("local")).toBe("Instituto do cérebro");
+    expect(seg.labels.get("destino")).toBe("Instituto do cérebro");
+    expect(seg.labels.has("ambulancia")).toBe(false);
+  });
 });
