@@ -99,6 +99,46 @@ diagnóstico, sem campo de procedimento; a ficha de regulação SAMU segue sem
 tratamento; e `IMPLANTE DE VEIA CAVA` ficou `unknown` — falta confirmar com
 o regulador se implante em hemodinâmica é sempre espera.
 
+**O funil inteiro, medido em 18/08.** 383 mensagens no grupo: 131 passaram
+no filtro e viraram transporte (100% das aprovadas), 252 barradas. Das
+barradas, ~180 são ruído real (abaixo de 30 caracteres). **As outras 70 são
+eventos operacionais que o painel nunca soube:** 41 cancelamentos, 12
+cobranças de posição, 6 retificações, 8 avisos da central, 3 perguntas de
+recurso. 41 cancelamentos contra 131 solicitações — um terço dos cards pode
+estar morto.
+
+Por que o vínculo é difícil, medido sobre os 41 cancelamentos: nome do
+paciente no texto **0/41**; número de OC 4/41 (a solicitação não traz OC, ele
+nasce depois no sistema do SAMU); remetente + janela de 12h resolve 9,
+ambíguo em 14, sem candidato em 18. Alargar a janela piora — 48h dá até 12
+candidatos. Heurística de tempo não resolve; só chuta com cara de certeza.
+
+O que resolve é `replied_to_id`, que o gateway **já manda** (conferido no
+fonte: `payload["replied_to_id"] = message.RepliedId`, mais `quoted_body`) e
+o `payload.ts` descartava. 12 dos 41 dizem "cancelamento DESTE apoio" — o
+dêitico só existe porque há citação na tela.
+
+**Captura implementada (esta etapa).** `replied_to_id`/`quoted_body` entram
+no `NormalizedMessage` e no `raw_json`; `pipeline/followup.ts` classifica
+cancel/chase/correction/notice. **Ainda não age** — grava e loga
+`hasReply`, para medir que fração dos acompanhamentos chega como resposta
+citada. Essa fração decide o desenho da etapa seguinte, e as 41 já gravadas
+não têm o campo (foi descartado na entrada): o vínculo vale de agora em
+diante.
+
+Escada de resolução combinada com o usuário, para a etapa que age:
+1. `replied_to_id` → alvo exato; selo "unidade pediu cancelamento" e um
+   clique do regulador para confirmar (nunca automático)
+2. sem citação, mas a unidade tem UM caso aberto → propõe como inferido
+3. ambíguo ou sem candidato → não chuta: vai para a caixa de eventos sem
+   dono e o bot pergunta no grupo, citando
+
+Dois casos a tratar junto: cancelamento que chega com a viatura já em rota
+não pode virar "cancelado" silencioso (alguém precisa avisar a equipe pelo
+rádio), e o bot **assina** (`🤖 Painel de transportes`) — a sessão do
+gateway é o número do chefe de plantão, e mensagem sem assinatura parece
+vinda dele.
+
 **Pendente, combinado com o usuário e ainda NÃO implementado:**
 1. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
    HGRS`), 1 caso só até agora; esperar mais antes de codificar

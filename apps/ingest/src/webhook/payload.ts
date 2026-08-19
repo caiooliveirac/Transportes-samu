@@ -18,6 +18,14 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *   body                 → texto (ou legenda de imagem/documento)
  *   timestamp            → RFC3339
  *   original_message_id  → só em `message.edited`: aponta a mensagem editada
+ *   replied_to_id        → ID da mensagem CITADA (quando é resposta)
+ *   quoted_body          → texto da mensagem citada
+ *
+ * `replied_to_id` é a chave que faltava para o acompanhamento: "solicito o
+ * cancelamento deste apoio" só faz sentido com a citação na tela, e sem
+ * esse campo não há como saber de qual transporte o grupo está falando —
+ * heurística por remetente + janela de tempo resolve menos de um quarto
+ * dos casos e chuta no resto.
  */
 export const EVENT_MESSAGE = "message";
 export const EVENT_MESSAGE_EDITED = "message.edited";
@@ -41,6 +49,10 @@ export interface NormalizedMessage {
   mediaKind: string | null;
   receivedAt: Date;
   fromMe: boolean;
+  /** ID da mensagem citada, quando esta é uma resposta. */
+  repliedToId: string | null;
+  /** Texto da mensagem citada — serve de conferência quando o ID não casa. */
+  quotedBody: string | null;
 }
 
 /** Chaves de mídia do payload do gateway (event_message.go). */
@@ -99,6 +111,8 @@ export function normalizeWebhook(raw: unknown): NormalizedMessage | null {
     receivedAt:
       parsedTs && !Number.isNaN(parsedTs.getTime()) ? parsedTs : new Date(),
     fromMe: p.is_from_me === true,
+    repliedToId: str(p.replied_to_id),
+    quotedBody: str(p.quoted_body),
   };
 }
 
