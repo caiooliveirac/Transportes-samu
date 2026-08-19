@@ -3,3 +3,4 @@ export * from "./transports";
 export * from "./worker";
 export * from "./credentials";
 export * from "./users";
+export * from "./followups";

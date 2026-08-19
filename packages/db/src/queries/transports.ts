@@ -10,6 +10,7 @@ import {
   type TripType,
 } from "@samu-cru/shared";
 import { db } from "../client";
+import { listFollowupsForTransport, pendingFollowupCounts } from "./followups";
 import {
   transportRequests,
   units,
@@ -20,6 +21,7 @@ import {
   type NewTransportRequest,
   type TransportDelay,
   type TransportEvent,
+  type TransportFollowup,
   type TransportRequest,
   type Unit,
   type WhatsappMessage,
@@ -73,6 +75,7 @@ export async function findTransportWithContext(id: string): Promise<{
   whatsappMessage: WhatsappMessage | null;
   events: TransportEvent[];
   delays: TransportDelay[];
+  followups: TransportFollowup[];
 } | undefined> {
   const [transport] = await db
     .select()
@@ -89,7 +92,7 @@ export async function findTransportWithContext(id: string): Promise<{
         .limit(1)
     : [];
 
-  const [events, delays] = await Promise.all([
+  const [events, delays, followups] = await Promise.all([
     db
       .select()
       .from(transportEvents)
@@ -100,6 +103,7 @@ export async function findTransportWithContext(id: string): Promise<{
       .from(transportDelays)
       .where(eq(transportDelays.transportId, id))
       .orderBy(asc(transportDelays.createdAt)),
+    listFollowupsForTransport(id),
   ]);
 
   return {
@@ -107,6 +111,7 @@ export async function findTransportWithContext(id: string): Promise<{
     whatsappMessage: whatsappMessage ?? null,
     events,
     delays,
+    followups,
   };
 }
 
@@ -133,9 +138,19 @@ export async function listPendingReview(): Promise<TransportRequest[]> {
     .orderBy(desc(transportRequests.createdAt));
 }
 
+/** Selos de acompanhamento por transporte, agregados para o card. */
+export interface FollowupBadge {
+  transportId: string;
+  intent: string;
+  count: number;
+  lastAt: string;
+}
+
 export interface DashboardSnapshot {
   units: Unit[];
   transports: TransportRequest[];
+  /** Pedidos do grupo ainda não tratados (cancelamento, cobrança…). */
+  followups: FollowupBadge[];
   /** Server-side now() — UI pode usar para calcular urgência sem sofrer drift. */
   serverTime: string;
 }
@@ -149,7 +164,7 @@ export interface DashboardSnapshot {
 export async function listTransportsForDashboard(): Promise<DashboardSnapshot> {
   const sixHoursAgo = sql`now() - interval '6 hours'`;
 
-  const [unitRows, transportRows] = await Promise.all([
+  const [unitRows, transportRows, followupRows] = await Promise.all([
     db
       .select()
       .from(units)
@@ -170,6 +185,7 @@ export async function listTransportsForDashboard(): Promise<DashboardSnapshot> {
         sql`${transportRequests.deadlineAt} NULLS LAST`,
         desc(transportRequests.createdAt),
       ),
+    pendingFollowupCounts(),
   ]);
 
   // Some references reused for type narrowing; silence unused-import warnings.
@@ -180,6 +196,12 @@ export async function listTransportsForDashboard(): Promise<DashboardSnapshot> {
   return {
     units: unitRows,
     transports: transportRows,
+    followups: followupRows.map((f) => ({
+      transportId: f.transportId,
+      intent: f.intent,
+      count: f.count,
+      lastAt: new Date(f.lastAt).toISOString(),
+    })),
     serverTime: new Date().toISOString(),
   };
 }

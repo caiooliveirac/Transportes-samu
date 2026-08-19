@@ -23,6 +23,7 @@ export default async function HomePage() {
   const snapshot = await listTransportsForDashboard();
 
   const data: DashboardData = {
+    followups: snapshot.followups,
     units: snapshot.units.map(
       (u) =>
         ({

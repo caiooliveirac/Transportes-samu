@@ -13,6 +13,7 @@ import {
   Ambulance,
   ArrowRight,
   Hourglass,
+  MessageSquareWarning,
   PackageOpen,
   ChevronDown,
   ChevronUp,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import {
   DEADLINE_KIND_LABEL,
+  followupMeta,
   formatWait,
   waitMinutes,
   waitTone,
@@ -33,7 +35,7 @@ import {
 } from "@samu-cru/shared";
 import { firstNameAndInitial, formatHHMM, formatRelative } from "@/lib/format";
 import { isFaded, isOverdue, isUrgent } from "@/lib/urgency";
-import type { SerializedTransport } from "@/lib/dashboard-types";
+import type { FollowupBadge, SerializedTransport } from "@/lib/dashboard-types";
 import { SeverityBadge } from "./severity-badge";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +47,8 @@ const TRIP_ICON: Record<TripType, typeof ArrowRight> = {
 
 interface Props {
   transport: SerializedTransport;
+  /** Pedidos do grupo ainda não tratados para este transporte. */
+  followups: FollowupBadge[];
   now: Date;
   index: number;
   total: number;
@@ -60,6 +64,7 @@ interface Props {
 
 export function TransportCard({
   transport,
+  followups,
   now,
   index,
   total,
@@ -85,6 +90,13 @@ export function TransportCard({
   const missingDestination = transport.destinationName === MISSING_DESTINATION;
   const missingProcedure = transport.procedure === MISSING_PROCEDURE;
   const dlKind = deadlineKind(transport.procedureTime);
+  // Pedido do grupo pendente. Cancelamento manda no visual do card; a
+  // cobrança destaca o horário, que é o que a unidade está reclamando.
+  const cancelAsked = followups.find((f) => f.intent === "cancel");
+  const chased = followups.find((f) => f.intent === "chase");
+  const otherFollowup = followups.find(
+    (f) => f.intent !== "cancel" && f.intent !== "chase",
+  );
   // Viatura parada no destino num ida-e-volta, e a dívida de buscar o
   // paciente quando ela foi liberada sem ele.
   const waiting = waitMinutes(transport.waitStartedAt, now);
@@ -111,6 +123,7 @@ export function TransportCard({
         "group/card bg-ink-100 hover:bg-ink-150 relative flex items-stretch rounded-md border-l-[3px] ring-1 ring-white/[0.05] transition-colors duration-150 hover:ring-white/10",
         meta.borderClass,
         overdue && "ring-rose-600/30",
+        cancelAsked && "ring-rose-500/50",
         urgent && !overdue && "animate-card-pulse",
         faded && "opacity-45",
         dragging && "opacity-30 ring-sky-400/50",
@@ -145,7 +158,10 @@ export function TransportCard({
               className={cn(
                 "shrink-0 font-mono text-[12.5px] font-semibold tabular-nums",
                 timeColor,
+                chased &&
+                  "rounded bg-amber-500/15 px-1 text-amber-200 ring-1 ring-inset ring-amber-500/40",
               )}
+              title={chased ? "A unidade cobrou posição deste horário" : undefined}
             >
               {formatHHMM(deadline)}
             </span>
@@ -177,6 +193,31 @@ export function TransportCard({
           >
             {hyp}
           </span>
+          {cancelAsked && (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-rose-500/20 px-1 text-[9.5px] font-semibold text-rose-200 ring-1 ring-inset ring-rose-500/40"
+              title="A unidade pediu cancelamento no grupo — abra para confirmar"
+            >
+              <MessageSquareWarning className="h-2.5 w-2.5" />
+              cancelar?
+            </span>
+          )}
+          {chased && (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1 text-[9.5px] font-medium text-amber-200 ring-1 ring-inset ring-amber-500/30"
+              title="A unidade cobrou posição no grupo"
+            >
+              cobrado{chased.count > 1 ? ` ${chased.count}x` : ""}
+            </span>
+          )}
+          {otherFollowup && (
+            <span
+              className="inline-flex shrink-0 items-center rounded bg-white/[0.06] px-1 text-[9.5px] font-medium text-zinc-300 ring-1 ring-inset ring-white/10"
+              title="Mensagem do grupo sobre este caso"
+            >
+              {followupMeta(otherFollowup.intent).short}
+            </span>
+          )}
           {transport.pickupNeeded && (
             <span
               className="inline-flex shrink-0 items-center gap-0.5 rounded bg-fuchsia-500/15 px-1 text-[9.5px] font-semibold text-fuchsia-200 ring-1 ring-inset ring-fuchsia-500/30"

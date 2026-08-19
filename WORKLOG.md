@@ -139,8 +139,31 @@ rádio), e o bot **assina** (`🤖 Painel de transportes`) — a sessão do
 gateway é o número do chefe de plantão, e mensagem sem assinatura parece
 vinda dele.
 
+**Acompanhamento agindo no painel (etapa seguinte, feita).** Migration
+`0008` cria `transport_followups` — uma linha por mensagem do grupo que
+fala de caso existente, com `transport_id` NULL quando não deu para saber
+de qual caso (caixa sem dono; chutar aqui tira a ambulância do paciente
+errado). `resolveFollowupTarget` implementa a escada: citação → alvo
+exato; sem citação com UM caso aberto da unidade → inferido, marcado como
+tal; ambíguo → null.
+
+No painel: card com pedido de cancelamento ganha anel rosa e selo
+`cancelar?`; cobrança destaca **o horário** (que é o que a unidade está
+reclamando) e mostra `cobrado Nx`. Os dois **sobem na fila** — cancelamento
+acima de tudo, cobrança logo abaixo. Na gaveta, seção "Pedidos do grupo"
+com o texto original, quem mandou, e dois botões: *cancelar transporte*
+(um clique, nunca automático) e *já tratei*. Cancelamento com viatura em
+rota mostra aviso para falar pelo rádio antes.
+
+Decisões do usuário nesta etapa: cobrança **sobe na fila com destaque para
+o horário**; retificação **mostra, não aplica**.
+
 **Pendente, combinado com o usuário e ainda NÃO implementado:**
-1. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
+1. **bot que pergunta no grupo** quando o alvo é ambíguo ou o parser não
+   leu um campo — assinado `🤖 Painel de transportes`, começando em modo
+   sombra (monta a mensagem, só registra no log). Precisa de autorização
+   explícita antes de enviar de verdade
+2. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
    HGRS`), 1 caso só até agora; esperar mais antes de codificar
 
 
