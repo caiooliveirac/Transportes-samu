@@ -6,7 +6,9 @@ import { isFromAllowedChat, looksLikeTransport } from "../pipeline/filter";
 import { markSeen, wasSeen } from "../pipeline/dedupe";
 import { handleMessageEdit, ingestMessage } from "../pipeline/ingest";
 import { classifyFollowup } from "../pipeline/followup";
-import { recordFollowup, resolveFollowupTarget } from "@samu-cru/db";
+import { findTransportById, recordFollowup, resolveFollowupTarget } from "@samu-cru/db";
+import { composeAskField, composeAskTarget } from "../bot/compose";
+import { recordBotMessage } from "../bot/outbox";
 import {
   EVENT_MESSAGE_EDITED,
   normalizeWebhook,
@@ -179,10 +181,48 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
           ? "acompanhamento vinculado ao transporte"
           : "acompanhamento sem dono — regulador decide",
       );
+
+      // Sem dono: é aqui que o bot resolveria, perguntando de qual
+      // paciente o grupo está falando. Em sombra ele só registra.
+      if (!target.transportId && followup.intent !== "notice") {
+        await recordBotMessage({
+          composed: composeAskTarget(followup.intent),
+          transportId: null,
+          triggerMessageDbId: result.whatsappMessageDbId,
+          waChatId: msg.chatId,
+          replyToWaMessageId: msg.messageId,
+        });
+      }
     } catch (err) {
       // Acompanhamento é enriquecimento: falhar aqui não pode derrubar a
       // ingestão da mensagem, que é o que não dá para perder.
       logger.error({ err, waMessageId: msg.messageId }, "falha ao registrar acompanhamento");
+    }
+  }
+
+  // Solicitação que entrou com campo crítico vazio: o grupo tem a
+  // informação, e perguntar na hora é mais barato que o regulador
+  // adivinhar depois.
+  if (result?.created && result.transportId) {
+    try {
+      const created = await findTransportById(result.transportId);
+      const ask = created
+        ? composeAskField({
+            destinationName: created.destinationName,
+            procedure: created.procedure,
+          })
+        : null;
+      if (ask) {
+        await recordBotMessage({
+          composed: ask,
+          transportId: result.transportId,
+          triggerMessageDbId: result.whatsappMessageDbId,
+          waChatId: msg.chatId,
+          replyToWaMessageId: msg.messageId,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, waMessageId: msg.messageId }, "falha ao montar pergunta do bot");
     }
   }
 

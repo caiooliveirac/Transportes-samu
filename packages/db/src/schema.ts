@@ -298,6 +298,47 @@ export const transportFollowups = pgTable(
   }),
 );
 
+/* ─── bot_messages ───────────────────────────────────────────────────────
+ * O que o bot DIRIA no grupo. Enquanto `BOT_MODE=shadow` (padrão), nada
+ * sai daqui: não existe caminho de envio no código, de propósito. A
+ * tabela serve para o usuário ler um dia inteiro de perguntas antes de
+ * autorizar qualquer envio.
+ *
+ * `triggerMessageId` é único: uma pergunta por mensagem que a provocou.
+ * Bot que repete pergunta num grupo operacional vira ruído, e ruído
+ * ensina todo mundo a ignorar — inclusive quando ele acerta.
+ */
+export const botMessages = pgTable(
+  "bot_messages",
+  {
+    id: serial("id").primaryKey(),
+    /** ask_target (qual paciente?) | ask_field (faltou destino/procedimento) */
+    kind: varchar("kind", { length: 24 }).notNull(),
+    transportId: uuid("transport_id").references(() => transportRequests.id, {
+      onDelete: "cascade",
+    }),
+    /** Mensagem do grupo que provocou a pergunta — e que o bot citaria. */
+    triggerMessageId: integer("trigger_message_id")
+      .references(() => whatsappMessages.id, { onDelete: "cascade" })
+      .notNull(),
+    waChatId: varchar("wa_chat_id", { length: 120 }).notNull(),
+    replyToWaMessageId: varchar("reply_to_wa_message_id", { length: 120 }),
+    body: text("body").notNull(),
+    /** shadow = só registrado; sent = enviado (ainda não implementado) */
+    status: varchar("status", { length: 12 }).notNull().default("shadow"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    triggerUnique: uniqueIndex("bot_messages_trigger_unique").on(
+      t.triggerMessageId,
+    ),
+    createdIdx: index("bot_messages_created_idx").on(t.createdAt),
+  }),
+);
+
 /* ─── transport_delays ───────────────────────────────────────────────────
  * Intercorrências / motivos de demora — 1 linha por (transporte, motivo).
  * Taxonomia vem de DELAY_REASON no shared (fonte única). O regulador marca
@@ -378,6 +419,8 @@ export type TransportRequest = typeof transportRequests.$inferSelect;
 export type NewTransportRequest = typeof transportRequests.$inferInsert;
 export type TransportEvent = typeof transportEvents.$inferSelect;
 export type NewTransportEvent = typeof transportEvents.$inferInsert;
+export type BotMessage = typeof botMessages.$inferSelect;
+export type NewBotMessage = typeof botMessages.$inferInsert;
 export type TransportFollowup = typeof transportFollowups.$inferSelect;
 export type NewTransportFollowup = typeof transportFollowups.$inferInsert;
 export type TransportDelay = typeof transportDelays.$inferSelect;

@@ -64,6 +64,13 @@
       "when": 1787098305158,
       "tag": "0008_grey_nighthawk",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787099039046,
+      "tag": "0009_special_leo",
+      "breakpoints": true
     }
   ]
 }

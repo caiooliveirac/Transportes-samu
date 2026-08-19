@@ -15,6 +15,8 @@ export type {
   NewTransportDelay,
   TransportFollowup,
   NewTransportFollowup,
+  BotMessage,
+  NewBotMessage,
   User,
   NewUser,
   WorkerHeartbeat,

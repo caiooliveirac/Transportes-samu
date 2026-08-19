@@ -29,7 +29,8 @@
     "db:studio": "pnpm --filter @samu-cru/db studio",
     "test": "pnpm -r --if-present test",
     "parser:test": "pnpm --filter @samu-cru/parser cli",
-    "setup:db": "bash scripts/setup-db.sh"
+    "setup:db": "bash scripts/setup-db.sh",
+    "ingest:bot-sombra": "pnpm --filter @samu-cru/ingest bot-sombra"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

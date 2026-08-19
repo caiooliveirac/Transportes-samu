@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "corpus": "tsx src/scripts/corpus.ts",
-    "backfill": "tsx src/scripts/backfill.ts"
+    "backfill": "tsx src/scripts/backfill.ts",
+    "bot-sombra": "tsx src/scripts/bot-sombra.ts"
   },
   "dependencies": {
     "@samu-cru/db": "workspace:*",
