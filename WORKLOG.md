@@ -169,6 +169,29 @@ teto de 6 por hora.
 
 Para ler a fila: `pnpm ingest:bot-sombra 100`.
 
+**Diagnóstico dos residuais (19/08).** Com 137 casos: 3 sem destino, 4 sem
+procedimento, 10 sem tipo de viagem, 8 em revisão. Abrindo um a um:
+
+- ~9 já estão resolvidos em código pelo #57 (`Local`, `CLINICA MEDICA`,
+  `RNM`, `INTRNAMENTO`) e só esperam `--reparse --aplicar`
+- **negrito que não fecha** (`*NOME: FULANO`, sem o asterisco final): 15
+  mensagens. O par de negrito atravessava `\n` e juntava duas linhas numa
+  só, escondendo o segundo rótulo. Agora o par não cruza linha e o
+  asterisco órfão é removido
+- **separador `\`** no campo que junta suspeita e procedimento
+  (`FRATURA … \ INTERNAÇÃO ORTOPÉDICA`): 5 mensagens
+- **ficha de regulação do SAMU** — o quinto template, agora com 2 casos:
+  `VÍTIMA`, `UNIDADE SAÚDE ORIGEM/DESTINO`, `SOLICITANTE`
+- **origem que o texto não nomeia** (2): deduzida do telefone do
+  remetente, com unanimidade exigida nos últimos 30 dias — telefone que já
+  apareceu como duas unidades não deduz nada
+- **nome vazio na própria mensagem** (3 casos, a unidade manda `*NOME:*` e
+  segue): parser não tem o que ler. Entrou na lista de campos que o bot
+  pergunta
+
+Falta uma decisão do regulador: `IMPLANTE DE VEIA CAVA` ficou `unknown` —
+implante em hemodinâmica é sempre espera, como marcapasso e permicath?
+
 **Pendente, combinado com o usuário e ainda NÃO implementado:**
 1. **envio real do bot** — hoje ele só registra. Precisa de autorização
    explícita, depois do usuário ler um dia de perguntas em sombra

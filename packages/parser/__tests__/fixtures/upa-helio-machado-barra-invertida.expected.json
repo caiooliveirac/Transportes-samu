@@ -1,0 +1,9 @@
+{
+  "receivedAt": "2026-08-17T22:00:00Z",
+  "expect": {
+    "patientName": { "equals": "CARLA TESTE FERREIRA" },
+    "originUnitCode": { "equals": "upa_helio_machado", "minConfidence": 0.8 },
+    "procedure": { "includes": "RNM" },
+    "tripType": { "equals": "round_trip" }
+  }
+}

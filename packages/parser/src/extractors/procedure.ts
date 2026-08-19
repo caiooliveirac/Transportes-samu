@@ -90,7 +90,8 @@ function findTerm(text: string): ProcedureTerm | null {
  * O procedimento é o que vem depois do último separador.
  */
 function afterSeparator(val: string): string {
-  const parts = val.split(/\s*(?:\/\/|>>)\s*/);
+  // `\` aparece no Hélio Machado ("FRATURA … \ INTERNAÇÃO ORTOPÉDICA").
+  const parts = val.split(/\s*(?:\/\/|>>|\\)\s*/);
   return (parts.length > 1 ? parts[parts.length - 1]! : val).trim();
 }
 

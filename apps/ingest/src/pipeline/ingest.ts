@@ -1,8 +1,13 @@
 import { eq, sql } from "drizzle-orm";
 import { parseMessage } from "@samu-cru/parser";
-import { MISSING_DESTINATION, MISSING_PROCEDURE } from "@samu-cru/shared";
+import {
+  MISSING_DESTINATION,
+  MISSING_PATIENT_NAME,
+  MISSING_PROCEDURE,
+} from "@samu-cru/shared";
 import {
   db,
+  inferOriginFromSender,
   insertTransport,
   schema,
   type WhatsappMessage,
@@ -129,6 +134,7 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
 
   // 2. Parser + insert (compartilhado com o backfill)
   const created = await createTransportFromMessage({
+    waSenderId: input.waSenderId,
     whatsappMessageDbId,
     rawText: input.rawText,
     receivedAt: input.receivedAt,
@@ -155,6 +161,8 @@ export async function createTransportFromMessage(params: {
   whatsappMessageDbId: number;
   rawText: string;
   receivedAt: Date;
+  /** Telefone de quem postou — base para deduzir a origem que o texto não diz. */
+  waSenderId?: string | null;
 }): Promise<{ transportId: string | null; globalConfidence: number; status: string }> {
   const baseLog = logger.child({ whatsappMessageDbId: params.whatsappMessageDbId });
 
@@ -186,9 +194,25 @@ export async function createTransportFromMessage(params: {
     };
   }
 
+  // Origem que o texto não nomeia: o telefone do remetente pertence a uma
+  // unidade e não muda de dono. Só deduz quando o histórico é unânime.
+  let originId = originResolved?.id ?? null;
+  let originRaw = parsed.originUnitCode.value ?? parsed.originUnitCode.raw ?? "—";
+  if (!originId && params.waSenderId) {
+    const inferred = await inferOriginFromSender(params.waSenderId);
+    if (inferred) {
+      const unit = [...units.values()].find((u) => u.id === inferred);
+      if (unit) {
+        originId = unit.id;
+        originRaw = unit.code;
+        baseLog.info({ unit: unit.code }, "origem deduzida do remetente");
+      }
+    }
+  }
+
   const transport = await insertTransport({
     whatsappMessageId: params.whatsappMessageDbId,
-    patientName: parsed.patientName.value ?? "(sem nome)",
+    patientName: parsed.patientName.value ?? MISSING_PATIENT_NAME,
     patientAgeText: parsed.patientAgeYears.value
       ? `${parsed.patientAgeYears.value}a`
       : null,
@@ -197,8 +221,8 @@ export async function createTransportFromMessage(params: {
       : null,
     patientCns: parsed.patientCns.value,
     patientCpf: parsed.patientCpf.value,
-    originUnitId: originResolved?.id ?? null,
-    originUnitRaw: parsed.originUnitCode.value ?? parsed.originUnitCode.raw ?? "—",
+    originUnitId: originId,
+    originUnitRaw: originRaw,
     destinationName: parsed.destination.value ?? MISSING_DESTINATION,
     procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
     procedureTime: parsed.procedureTimeText.value,
@@ -294,6 +318,24 @@ export async function reparseTransportFromMessage(params: {
     ? (units.get(parsed.originUnitCode.value) ?? null)
     : null;
 
+  // Mesma dedução do fluxo novo: origem que o texto não diz vem do
+  // telefone de quem postou.
+  let originId = originResolved?.id ?? null;
+  let originRaw = parsed.originUnitCode.value ?? "—";
+  if (!originId) {
+    const [waRow] = await db
+      .select({ waSenderId: schema.whatsappMessages.waSenderId })
+      .from(schema.whatsappMessages)
+      .where(eq(schema.whatsappMessages.id, params.whatsappMessageDbId))
+      .limit(1);
+    const inferred = await inferOriginFromSender(waRow?.waSenderId ?? null);
+    const unit = inferred ? [...units.values()].find((u) => u.id === inferred) : null;
+    if (unit) {
+      originId = unit.id;
+      originRaw = unit.code;
+    }
+  }
+
   const existing = await db
     .select({ id: schema.transportRequests.id, status: schema.transportRequests.status })
     .from(schema.transportRequests)
@@ -306,7 +348,7 @@ export async function reparseTransportFromMessage(params: {
   const rows = await db
     .update(schema.transportRequests)
     .set({
-      patientName: parsed.patientName.value ?? "(sem nome)",
+      patientName: parsed.patientName.value ?? MISSING_PATIENT_NAME,
       patientAgeText: parsed.patientAgeYears.value
         ? `${parsed.patientAgeYears.value}a`
         : null,
@@ -315,8 +357,8 @@ export async function reparseTransportFromMessage(params: {
         : null,
       patientCns: parsed.patientCns.value,
       patientCpf: parsed.patientCpf.value,
-      originUnitId: originResolved?.id ?? null,
-      originUnitRaw: parsed.originUnitCode.value ?? "—",
+      originUnitId: originId,
+      originUnitRaw: originRaw,
       destinationName: parsed.destination.value ?? MISSING_DESTINATION,
       procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
       procedureTime: parsed.procedureTimeText.value,

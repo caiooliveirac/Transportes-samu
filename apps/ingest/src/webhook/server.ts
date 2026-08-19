@@ -210,6 +210,7 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
         ? composeAskField({
             destinationName: created.destinationName,
             procedure: created.procedure,
+            patientName: created.patientName,
           })
         : null;
       if (ask) {

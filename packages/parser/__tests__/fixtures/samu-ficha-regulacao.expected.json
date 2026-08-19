@@ -1,0 +1,10 @@
+{
+  "receivedAt": "2026-08-18T09:00:00Z",
+  "expect": {
+    "patientName": { "equals": "CARLA TESTE FERREIRA" },
+    "originUnitCode": { "equals": "upa_brotas", "minConfidence": 0.8 },
+    "destination": { "includes": "Roberto Santos" },
+    "procedure": { "includes": "INTERNAMENTO" },
+    "tripType": { "equals": "one_way" }
+  }
+}

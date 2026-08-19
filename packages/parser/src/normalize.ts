@@ -33,8 +33,13 @@ function boldLabelsToColon(raw: string): string {
 export function normalize(raw: string): string {
   return (
     boldLabelsToColon(raw)
-      // `*bold*` → `bold` (markdown do WhatsApp)
-      .replace(/\*+([^*]+?)\*+/g, "$1")
+      // `*bold*` → `bold` (markdown do WhatsApp). Não atravessa linha: as
+      // unidades esquecem o asterisco de fechamento ("*NOME: FULANO"), e
+      // um par que cruza \n junta duas linhas numa só, escondendo o
+      // segundo rótulo.
+      .replace(/\*+([^*\n]+?)\*+/g, "$1")
+      // Asterisco de abertura que ficou sem par: some, o rótulo fica.
+      .replace(/^[ \t]*\*+(?=[A-Za-zÀ-ſ])/gm, "")
       // `*PA*: 120x80` vira "PA: : 120x80" na conversão acima
       .replace(/:[ \t]*:/g, ":")
       // Tipografia: en/em dash unificado

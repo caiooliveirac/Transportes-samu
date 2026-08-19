@@ -10,6 +10,8 @@ const PATIENT_KEYS = [
   "nome completo",
   "nome do paciente",
   "pte",
+  // Ficha de regulação do SAMU chama o paciente de vítima.
+  "vitima",
 ];
 
 /**

@@ -1,0 +1,10 @@
+{
+  "receivedAt": "2026-08-17T16:59:00Z",
+  "expect": {
+    "patientName": { "equals": "CARLA TESTE FERREIRA" },
+    "originUnitCode": { "equals": "upa_san_martin", "minConfidence": 0.8 },
+    "destination": { "includes": "ERNESTO SIMOES" },
+    "procedure": { "includes": "INTERNAMENTO" },
+    "tripType": { "equals": "one_way" }
+  }
+}
