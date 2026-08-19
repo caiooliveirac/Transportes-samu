@@ -158,11 +158,20 @@ rota mostra aviso para falar pelo rádio antes.
 Decisões do usuário nesta etapa: cobrança **sobe na fila com destaque para
 o horário**; retificação **mostra, não aplica**.
 
+**Bot em modo sombra (autorizado em 18/08 — sombra, não envio).** Migration
+`0009` cria `bot_messages`: o que ele DIRIA no grupo. **Não existe caminho
+de envio no código, de propósito** — ligar o envio será um PR próprio, com
+a decisão registrada. Dois gatilhos: acompanhamento sem dono (pergunta de
+qual paciente se trata) e solicitação que entrou sem destino/procedimento
+(pergunta o campo). Assina `🤖 Painel de transportes`, pergunta uma coisa
+só, uma pergunta por mensagem-gatilho (unique em `trigger_message_id`) e
+teto de 6 por hora.
+
+Para ler a fila: `pnpm ingest:bot-sombra 100`.
+
 **Pendente, combinado com o usuário e ainda NÃO implementado:**
-1. **bot que pergunta no grupo** quando o alvo é ambíguo ou o parser não
-   leu um campo — assinado `🤖 Painel de transportes`, começando em modo
-   sombra (monta a mensagem, só registra no log). Precisa de autorização
-   explícita antes de enviar de verdade
+1. **envio real do bot** — hoje ele só registra. Precisa de autorização
+   explícita, depois do usuário ler um dia de perguntas em sombra
 2. quinto template — ficha de regulação SAMU (`VÍTIMA / QUEIXA / UPA BROTAS X
    HGRS`), 1 caso só até agora; esperar mais antes de codificar
 
