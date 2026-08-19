@@ -175,3 +175,41 @@ export async function pendingFollowupCounts(): Promise<
     lastAt: Date;
   }>;
 }
+
+/**
+ * Unidade de origem deduzida do remetente.
+ *
+ * Cada telefone do grupo pertence a uma unidade e não muda de dono. Quando
+ * a mensagem não nomeia a origem — acontece na ficha de regulação do SAMU
+ * e no template curto de transferência — o histórico do próprio remetente
+ * responde com segurança maior que qualquer fuzzy match no texto.
+ *
+ * Exige unanimidade nos últimos 30 dias: telefone que já apareceu como
+ * duas unidades diferentes não deduz nada.
+ */
+export async function inferOriginFromSender(
+  waSenderId: string | null,
+): Promise<number | null> {
+  if (!waSenderId) return null;
+  const rows = await db
+    .select({
+      unitId: transportRequests.originUnitId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(transportRequests)
+    .innerJoin(
+      whatsappMessages,
+      eq(transportRequests.whatsappMessageId, whatsappMessages.id),
+    )
+    .where(
+      and(
+        eq(whatsappMessages.waSenderId, waSenderId),
+        gt(transportRequests.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+        sql`${transportRequests.originUnitId} is not null`,
+      ),
+    )
+    .groupBy(transportRequests.originUnitId);
+
+  if (rows.length !== 1) return null;
+  return rows[0]!.unitId;
+}

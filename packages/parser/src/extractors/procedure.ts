@@ -42,6 +42,9 @@ const PROCEDURE_TERMS: ReadonlyArray<ProcedureTerm> = [
   { pattern: /\bendoscopia\b|\beda\b/, canonical: "Endoscopia digestiva", waits: true },
   { pattern: /\bmarcapasso\b/, canonical: "Implante de marcapasso", waits: true },
   { pattern: /\bpermicath\b/, canonical: "Implante de permicath", waits: true },
+  // Implante em hemodinâmica (veia cava, cateter, prótese) é espera, como
+  // marcapasso e permicath — confirmado pelo regulador em 19/08.
+  { pattern: /\bimplantes?\b/, canonical: "Implante", waits: true },
   { pattern: /\bhemodi[áa]lise\b/, canonical: "Hemodiálise", waits: true },
   { pattern: /\bangio\w*/, canonical: "Angiotomografia", waits: true },
   { pattern: /\btomografia\b|\btc\b/, canonical: "Tomografia", waits: true },
@@ -90,7 +93,8 @@ function findTerm(text: string): ProcedureTerm | null {
  * O procedimento é o que vem depois do último separador.
  */
 function afterSeparator(val: string): string {
-  const parts = val.split(/\s*(?:\/\/|>>)\s*/);
+  // `\` aparece no Hélio Machado ("FRATURA … \ INTERNAÇÃO ORTOPÉDICA").
+  const parts = val.split(/\s*(?:\/\/|>>|\\)\s*/);
   return (parts.length > 1 ? parts[parts.length - 1]! : val).trim();
 }
 

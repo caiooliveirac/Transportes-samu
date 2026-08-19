@@ -1,4 +1,8 @@
-import { MISSING_DESTINATION, MISSING_PROCEDURE } from "@samu-cru/shared";
+import {
+  MISSING_DESTINATION,
+  MISSING_PATIENT_NAME,
+  MISSING_PROCEDURE,
+} from "@samu-cru/shared";
 
 /**
  * O que o bot perguntaria no grupo.
@@ -48,8 +52,12 @@ export function composeAskTarget(intent: string): ComposedMessage {
 export function composeAskField(params: {
   destinationName: string;
   procedure: string;
+  patientName?: string;
 }): ComposedMessage | null {
   const faltando: string[] = [];
+  // Nome vazio acontece de verdade: a unidade manda "*NOME:*" e segue
+  // para a data de nascimento. Sem nome o regulador não chama ninguém.
+  if (params.patientName === MISSING_PATIENT_NAME) faltando.push("o *nome do paciente*");
   if (params.destinationName === MISSING_DESTINATION) faltando.push("o *hospital de destino*");
   if (params.procedure === MISSING_PROCEDURE) faltando.push("o *procedimento*");
   if (faltando.length === 0) return null;
@@ -57,10 +65,12 @@ export function composeAskField(params: {
   const campos = faltando.join(" e ");
   const exemplo =
     faltando.length > 1
-      ? "`DESTINO: <hospital>` e `PROCEDIMENTO: <procedimento>`"
+      ? "os campos que faltaram"
       : faltando[0]!.includes("destino")
         ? "`DESTINO: <hospital>`"
-        : "`PROCEDIMENTO: <procedimento>`";
+        : faltando[0]!.includes("nome")
+          ? "`NOME: <paciente>`"
+          : "`PROCEDIMENTO: <procedimento>`";
 
   return {
     kind: "ask_field",

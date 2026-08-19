@@ -257,6 +257,7 @@ describe("inferTripType — família da espera", () => {
     ["Endoscopia digestiva", "round_trip"],
     ["Implante de marcapasso", "round_trip"],
     ["Implante de permicath", "round_trip"],
+    ["IMPLANTE DE VEIA CAVA", "round_trip"],
     ["Angiotomografia de aorta", "round_trip"],
     ["USG DOPPLER ARTERIAL", "round_trip"],
     ["Avaliação Neurologia", "round_trip"],

@@ -16,6 +16,7 @@ export const PARSE_CONFIDENCE_FLOOR = 0.75;
  */
 export const MISSING_DESTINATION = "(sem destino)";
 export const MISSING_PROCEDURE = "(sem procedimento)";
+export const MISSING_PATIENT_NAME = "(sem nome)";
 
 /**
  * Que tipo de prazo o grupo escreveu. São três coisas diferentes e o

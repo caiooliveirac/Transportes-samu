@@ -33,6 +33,10 @@ const LABEL_SYNONYMS: ReadonlyArray<readonly [string, string]> = [
   ["hospital de destino", "destino"],
   ["destino final", "destino"],
   ["unidade de origem", "origem"],
+  // Ficha de regulação do SAMU — o quinto template do grupo.
+  ["unidade saude origem", "origem"],
+  ["unidade saude destino", "destino"],
+  ["solicitante", "origem"],
   ["unidade solicitante", "origem"],
   ["unidade origem", "origem"],
   ["data/horario da apresentacao", "horario"],
