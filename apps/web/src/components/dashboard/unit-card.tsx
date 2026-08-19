@@ -7,6 +7,7 @@
 import { Zap } from "lucide-react";
 import { isOverdue, isUrgent } from "@/lib/urgency";
 import type {
+  FollowupBadge,
   SerializedTransport,
   SerializedUnit,
 } from "@/lib/dashboard-types";
@@ -17,6 +18,8 @@ interface Props {
   unit: SerializedUnit;
   shortName: string;
   transports: SerializedTransport[];
+  /** Pedidos do grupo pendentes, por transporte. */
+  followupsById: Map<string, FollowupBadge[]>;
   now: Date;
   priority?: boolean;
   onSelect: (id: string) => void;
@@ -28,6 +31,7 @@ export function UnitCard({
   unit,
   shortName,
   transports,
+  followupsById,
   now,
   priority,
   onSelect,
@@ -105,6 +109,7 @@ export function UnitCard({
         ) : (
           transports.map((t, i) => (
             <TransportCard
+              followups={followupsById.get(t.id) ?? []}
               key={t.id}
               transport={t}
               now={now}

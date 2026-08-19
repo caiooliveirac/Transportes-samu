@@ -16,6 +16,7 @@ import { DetailSheet } from "./detail-sheet";
 import { stripAccents } from "@/lib/format-internal";
 import type {
   DashboardData,
+  FollowupBadge,
   SerializedTransport,
   SerializedUnit,
 } from "@/lib/dashboard-types";
@@ -81,15 +82,31 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
 
   const now = useMemo(() => new Date(data.serverTime), [data.serverTime]);
 
+  // Pedido do grupo ainda não tratado, por transporte.
+  const followupsById = useMemo(() => {
+    const map = new Map<string, FollowupBadge[]>();
+    for (const f of data.followups ?? []) {
+      const list = map.get(f.transportId);
+      if (list) list.push(f);
+      else map.set(f.transportId, [f]);
+    }
+    return map;
+  }, [data.followups]);
+
   const urgencyRank = useCallback(
     (t: SerializedTransport): number => {
       if (isTerminal(t.status)) return 4;
+      // Pedido do grupo sobe na fila: cancelamento primeiro (o caso pode
+      // estar morto e ocupando viatura), cobrança em seguida.
+      const pending = followupsById.get(t.id);
+      if (pending?.some((f) => f.intent === "cancel")) return -2;
+      if (pending?.some((f) => f.intent === "chase")) return -1;
       if (isOverdue(t.deadlineAt, t.status, now, t.procedureTime)) return 0;
       if (isUrgent(t.deadlineAt, t.status, now, t.procedureTime)) return 1;
       if (t.deadlineAt) return 2;
       return 3;
     },
-    [now],
+    [now, followupsById],
   );
 
   const sortByUrgency = useCallback(
@@ -262,6 +279,7 @@ export function DashboardShell({ initial, currentUser }: DashboardShellProps) {
       unit={u}
       shortName={shortNameOf(u)}
       transports={grouped.get(u.code) ?? []}
+      followupsById={followupsById}
       now={now}
       priority={priority}
       onSelect={setSelectedId}

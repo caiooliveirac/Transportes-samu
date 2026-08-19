@@ -254,6 +254,50 @@ export const transportEvents = pgTable(
   }),
 );
 
+/* ─── transport_followups ────────────────────────────────────────────────
+ * Mensagem do grupo que fala de um transporte que JÁ existe: pedido de
+ * cancelamento, cobrança de posição, retificação. São 70 nas primeiras 383
+ * mensagens — 41 delas cancelamento, contra 131 solicitações.
+ *
+ * `transportId` null = a mensagem chegou sem citação e não deu para saber
+ * de qual caso ela fala. Fica na caixa "sem dono": chutar aqui tira a
+ * ambulância do paciente errado.
+ *
+ * Nada aqui muda o transporte sozinho. O regulador confirma — o grupo
+ * pede, o painel mostra, a pessoa decide.
+ */
+export const transportFollowups = pgTable(
+  "transport_followups",
+  {
+    id: serial("id").primaryKey(),
+    transportId: uuid("transport_id").references(() => transportRequests.id, {
+      onDelete: "cascade",
+    }),
+    whatsappMessageId: integer("whatsapp_message_id")
+      .references(() => whatsappMessages.id, { onDelete: "cascade" })
+      .notNull(),
+    /** cancel | chase | correction | notice */
+    intent: varchar("intent", { length: 16 }).notNull(),
+    /** Como o alvo foi identificado: reply | single_open | none */
+    resolvedBy: varchar("resolved_by", { length: 16 }).notNull(),
+    senderName: varchar("sender_name", { length: 120 }),
+    text: text("text").notNull(),
+    /** Quando o regulador tratou (cancelou, leu, descartou). */
+    handledAt: timestamp("handled_at", { withTimezone: true }),
+    handledBy: integer("handled_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    transportIdx: index("transport_followups_transport_idx").on(t.transportId),
+    pendingIdx: index("transport_followups_pending_idx").on(t.handledAt),
+    messageUnique: uniqueIndex("transport_followups_message_unique").on(
+      t.whatsappMessageId,
+    ),
+  }),
+);
+
 /* ─── transport_delays ───────────────────────────────────────────────────
  * Intercorrências / motivos de demora — 1 linha por (transporte, motivo).
  * Taxonomia vem de DELAY_REASON no shared (fonte única). O regulador marca
@@ -334,6 +378,8 @@ export type TransportRequest = typeof transportRequests.$inferSelect;
 export type NewTransportRequest = typeof transportRequests.$inferInsert;
 export type TransportEvent = typeof transportEvents.$inferSelect;
 export type NewTransportEvent = typeof transportEvents.$inferInsert;
+export type TransportFollowup = typeof transportFollowups.$inferSelect;
+export type NewTransportFollowup = typeof transportFollowups.$inferInsert;
 export type TransportDelay = typeof transportDelays.$inferSelect;
 export type NewTransportDelay = typeof transportDelays.$inferInsert;
 export type User = typeof users.$inferSelect;

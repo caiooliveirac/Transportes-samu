@@ -13,6 +13,7 @@ import {
   Check,
   Hourglass,
   MapPin,
+  MessageSquareWarning,
   PackageOpen,
   Pencil,
   RefreshCcw,
@@ -28,6 +29,7 @@ import {
   SEVERITY_META,
   deadlineKind,
   deriveSeverity,
+  followupMeta,
   formatWait,
   waitMinutes,
   waitTone,
@@ -55,6 +57,7 @@ import {
   maskCns,
 } from "@/lib/format";
 import type {
+  SerializedFollowup,
   SerializedTransport,
   TransportDetailData,
 } from "@/lib/dashboard-types";
@@ -161,6 +164,7 @@ function DetailBody({
   onDelaysChange,
 }: DetailBodyProps) {
   const { transport, whatsappMessage, events, delays } = data;
+  const [followups, setFollowups] = useState(data.followups ?? []);
   const meta = STATUS[transport.status];
   const TripIcon = TRIP_ICON[transport.tripType];
   const tripLabel = TRIP_LABEL[transport.tripType];
@@ -271,6 +275,17 @@ function DetailBody({
           onPatched={onPatch}
           onDelaysChange={onDelaysChange}
         />
+
+        {followups.length > 0 && (
+          <Section label="Pedidos do grupo">
+            <FollowupList
+              transport={transport}
+              followups={followups}
+              onChange={setFollowups}
+              onPatched={onPatch}
+            />
+          </Section>
+        )}
 
         <Section label="Rota">
           <div className="flex flex-col gap-2 rounded-md bg-white/[0.02] p-3 ring-1 ring-inset ring-white/5">
@@ -405,6 +420,144 @@ function DetailBody({
           </Section>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * O que o grupo mandou sobre este caso depois de criado: pedido de
+ * cancelamento, cobrança de posição, retificação.
+ *
+ * Nada aqui age sozinho. Cancelar tira a ambulância de um paciente, e a
+ * frase que chega ("solicito o cancelamento deste apoio") não diz sozinha
+ * se a viatura já saiu. Quem decide é quem está olhando a fila.
+ */
+function FollowupList({
+  transport,
+  followups,
+  onChange,
+  onPatched,
+}: {
+  transport: SerializedTransport;
+  followups: SerializedFollowup[];
+  onChange: (next: SerializedFollowup[]) => void;
+  onPatched: (patch: Partial<SerializedTransport>) => void;
+}) {
+  const [busy, setBusy] = useState<number | null>(null);
+  const pending = followups.filter((f) => f.handledAt === null);
+  if (pending.length === 0) return null;
+
+  // Viatura já a caminho ou no destino: cancelar aqui não basta, alguém
+  // precisa falar com a equipe pelo rádio.
+  const vehicleMoving = [
+    "em_deslocamento_origem",
+    "paciente_embarcado",
+    "em_deslocamento_destino",
+    "chegou_destino",
+  ].includes(transport.status);
+
+  async function markHandled(id: number) {
+    setBusy(id);
+    try {
+      const r = await fetch(`/api/followups/${id}`, { method: "PATCH" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      onChange(
+        followups.map((f) =>
+          f.id === id ? { ...f, handledAt: new Date().toISOString() } : f,
+        ),
+      );
+    } catch (err) {
+      console.error("[detail-sheet] followup handle failed:", err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function cancelTransport(followupId: number) {
+    setBusy(followupId);
+    try {
+      const r = await fetch(`/api/transports/${transport.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelado" }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      onPatched({ status: "cancelado" });
+      await markHandled(followupId);
+    } catch (err) {
+      console.error("[detail-sheet] cancel failed:", err);
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {pending.map((f) => {
+        const meta = followupMeta(f.intent);
+        return (
+          <div
+            key={f.id}
+            className={cn(
+              "flex flex-col gap-2 rounded-md p-3 ring-1 ring-inset",
+              f.intent === "cancel"
+                ? "bg-rose-500/[0.07] ring-rose-500/25"
+                : "bg-white/[0.02] ring-white/5",
+            )}
+          >
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-zinc-200">
+              <MessageSquareWarning
+                className={cn(
+                  "h-3.5 w-3.5",
+                  f.intent === "cancel" ? "text-rose-300" : "text-zinc-400",
+                )}
+              />
+              {meta.label}
+              {f.resolvedBy === "single_open" && (
+                <span
+                  className="rounded bg-amber-500/10 px-1 text-[10px] font-medium text-amber-300 ring-1 ring-inset ring-amber-500/25"
+                  title="Vínculo deduzido: era o único caso aberto da unidade. Confira antes de agir."
+                >
+                  inferido
+                </span>
+              )}
+            </div>
+            <p className="text-[12px] leading-relaxed text-zinc-300">{f.text}</p>
+            <p className="font-mono text-[10.5px] text-zinc-500">
+              {formatHHMM(f.createdAt)} · {f.senderName ?? "?"}
+            </p>
+
+            {f.intent === "cancel" && vehicleMoving && (
+              <p className="text-[11.5px] text-amber-300">
+                A viatura já está em rota. Cancelar aqui não avisa a equipe —
+                fale pelo rádio antes.
+              </p>
+            )}
+
+            <div className="flex items-center gap-2">
+              {f.intent === "cancel" && transport.status !== "cancelado" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy === f.id}
+                  onClick={() => void cancelTransport(f.id)}
+                  className="h-7 px-2 text-[11px] text-rose-200"
+                >
+                  <Check /> cancelar transporte
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy === f.id}
+                onClick={() => void markHandled(f.id)}
+                className="h-7 px-2 text-[11px]"
+              >
+                já tratei
+              </Button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

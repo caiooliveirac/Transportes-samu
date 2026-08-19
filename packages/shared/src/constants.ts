@@ -80,3 +80,23 @@ export function formatWait(minutes: number): string {
   const m = minutes % 60;
   return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, "0")}`;
 }
+
+/**
+ * Mensagem do grupo sobre um caso que já existe. O painel mostra; quem
+ * decide é o regulador — cancelar um transporte por leitura automática de
+ * texto tira a ambulância de um paciente.
+ */
+export type FollowupIntent = "cancel" | "chase" | "correction" | "notice";
+
+export const FOLLOWUP_META: Readonly<
+  Record<FollowupIntent, { label: string; short: string; priority: number }>
+> = {
+  cancel: { label: "Unidade pediu cancelamento", short: "cancelar?", priority: 0 },
+  chase: { label: "Unidade cobrou posição", short: "cobrado", priority: 1 },
+  correction: { label: "Unidade mandou retificação", short: "retificação", priority: 2 },
+  notice: { label: "Aviso da central", short: "aviso", priority: 3 },
+};
+
+export function followupMeta(intent: string) {
+  return FOLLOWUP_META[intent as FollowupIntent] ?? FOLLOWUP_META.notice;
+}

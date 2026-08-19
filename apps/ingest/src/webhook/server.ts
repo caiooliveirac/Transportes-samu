@@ -6,6 +6,7 @@ import { isFromAllowedChat, looksLikeTransport } from "../pipeline/filter";
 import { markSeen, wasSeen } from "../pipeline/dedupe";
 import { handleMessageEdit, ingestMessage } from "../pipeline/ingest";
 import { classifyFollowup } from "../pipeline/followup";
+import { recordFollowup, resolveFollowupTarget } from "@samu-cru/db";
 import {
   EVENT_MESSAGE_EDITED,
   normalizeWebhook,
@@ -14,6 +15,13 @@ import {
 } from "./payload";
 
 const MAX_BODY_BYTES = 1_000_000;
+
+/**
+ * Janela para deduzir o alvo pelo remetente quando não há citação. 12h
+ * cobre o plantão; alargar não ajuda — medido no corpus, 48h leva a até 12
+ * candidatos para o mesmo cancelamento.
+ */
+const FOLLOWUP_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 /**
  * Contadores expostos no `GET /`. Existem porque, em `LOG_LEVEL=info`,
@@ -141,6 +149,42 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
     receivedAt: msg.receivedAt,
     createTransport: verdict.pass,
   });
+
+  // Acompanhamento: liga a mensagem ao transporte de que ela fala e deixa
+  // o pedido visível no painel. Nada muda o transporte sozinho — o grupo
+  // pede, o painel mostra, o regulador decide.
+  if (followup && result?.whatsappMessageDbId) {
+    try {
+      const target = await resolveFollowupTarget({
+        repliedToWaMessageId: msg.repliedToId,
+        senderId: msg.senderId,
+        since: new Date(msg.receivedAt.getTime() - FOLLOWUP_WINDOW_MS),
+      });
+      await recordFollowup({
+        transportId: target.transportId,
+        whatsappMessageId: result.whatsappMessageDbId,
+        intent: followup.intent,
+        resolvedBy: target.resolvedBy,
+        senderName: msg.senderName,
+        text: msg.text,
+      });
+      logger.info(
+        {
+          waMessageId: msg.messageId,
+          intent: followup.intent,
+          resolvedBy: target.resolvedBy,
+          candidates: target.candidates,
+        },
+        target.transportId
+          ? "acompanhamento vinculado ao transporte"
+          : "acompanhamento sem dono — regulador decide",
+      );
+    } catch (err) {
+      // Acompanhamento é enriquecimento: falhar aqui não pode derrubar a
+      // ingestão da mensagem, que é o que não dá para perder.
+      logger.error({ err, waMessageId: msg.messageId }, "falha ao registrar acompanhamento");
+    }
+  }
 
   return {
     stored: result?.stored ?? false,
