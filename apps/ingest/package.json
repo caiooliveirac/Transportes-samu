@@ -18,11 +18,11 @@
     "@samu-cru/parser": "workspace:*",
     "@samu-cru/shared": "workspace:*",
     "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.36.4",
+    "drizzle-orm": "^0.45.2",
     "pino": "^9.6.0"
   },
   "devDependencies": {
-    "tsx": "^4.19.2",
+    "tsx": "^4.23.12",
     "vitest": "^2.1.8"
   }
 }
