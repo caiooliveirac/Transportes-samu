@@ -28,11 +28,11 @@
   },
   "dependencies": {
     "@samu-cru/shared": "workspace:*",
-    "drizzle-orm": "^0.36.4",
+    "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.5"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.28.1",
+    "drizzle-kit": "^0.31.10",
     "dotenv": "^16.4.7"
   }
 }
