@@ -14,13 +14,10 @@ export const dynamic = "force-dynamic";
  * a tela de senha continua funcionando como sempre.
  */
 export async function GET(req: NextRequest) {
-  const destino = (caminho: string) => {
-    const url = req.nextUrl.clone();
-    const [pathname = "/", search] = caminho.split("?");
-    url.pathname = pathname;
-    url.search = search ? `?${search}` : "";
-    return NextResponse.redirect(url);
-  };
+  // Location relativo: atrás do nginx, req.nextUrl de route handler traz o
+  // host interno (localhost:3020); o navegador resolve contra o host público.
+  const destino = (caminho: string) =>
+    new NextResponse(null, { status: 307, headers: { location: caminho } });
 
   const email = await lerTokenFederado(req.nextUrl.searchParams.get("token") ?? "");
   if (!email) return destino("/login?sso=token-invalido");
