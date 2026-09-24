@@ -14,14 +14,22 @@ export function LoginForm() {
   // depois do login, em resolvePostLoginTarget. Assumir "/solicitar" aqui
   // é o que travava o botão para regulador e admin.
   const explicitNext = params.get("next");
+  // Vindo do portal mnrs.com.br (/api/auth/sso) sem conseguir entrar.
+  const sso = params.get("sso");
 
   const [mode, setMode] = useState<Mode>(
-    explicitNext?.startsWith("/admin") || explicitNext === "/" ? "user" : "unit",
+    sso || explicitNext?.startsWith("/admin") || explicitNext === "/" ? "user" : "unit",
   );
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    sso === "sem-acesso"
+      ? "Seu e-mail do portal não tem acesso ao Transportes. Entre com a senha daqui ou peça acesso à coordenação."
+      : sso
+        ? "O acesso pelo portal expirou. Volte ao portal ou entre com a senha."
+        : null,
+  );
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
