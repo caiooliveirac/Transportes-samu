@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { parseMessage } from "@samu-cru/parser";
+import { extractAdvanced, parseMessage } from "@samu-cru/parser";
 import {
   MISSING_DESTINATION,
   MISSING_PATIENT_NAME,
@@ -214,8 +214,18 @@ export async function createTransportFromMessage(params: {
     }
   }
 
+  // Pedido de avançada: o molde do grupo de apoio de UTI não traz
+  // "procedimento", e sem isso todo card cairia em revisão. O que ele traz
+  // de próprio (número, vaga zero, COVID, SD) vem de extractAdvanced.
+  const adv = params.advanced ? extractAdvanced(params.rawText) : null;
+  if (adv && !originId && adv.origin) originRaw = adv.origin;
+  const advOk = !!adv && !!parsed.patientName.value && !!parsed.destination.value;
+
   const transport = await insertTransport({
     whatsappMessageId: params.whatsappMessageDbId,
+    requestNumber: adv?.number ?? null,
+    vagaZero: adv?.vagaZero ?? false,
+    covid: adv?.covid ?? null,
     patientName: parsed.patientName.value ?? MISSING_PATIENT_NAME,
     patientAgeText: parsed.patientAgeYears.value
       ? `${parsed.patientAgeYears.value}a`
@@ -229,13 +239,15 @@ export async function createTransportFromMessage(params: {
     originUnitRaw: originRaw,
     requestedKind: params.advanced ? "USA" : null,
     destinationName: parsed.destination.value ?? MISSING_DESTINATION,
-    procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
+    procedure:
+      parsed.procedure.value ??
+      (adv ? (adv.vagaZero ? "VAGA ZERO — transporte de UTI" : "Transporte de UTI") : MISSING_PROCEDURE),
     procedureTime: parsed.procedureTimeText.value,
     deadlineAt: parsed.deadlineAt.value,
     tripType: parsed.tripType.value ?? "unknown",
     vitals: parsed.vitals.value ?? null,
-    diagnoses: parsed.diagnoses.value ?? null,
-    status: parsed.suggestedStatus,
+    diagnoses: parsed.diagnoses.value ?? (adv?.diagnosis ? [adv.diagnosis] : null),
+    status: advOk ? "novo" : parsed.suggestedStatus,
     parseConfidence: parsed.globalConfidence,
     parseWarnings: parsed.warnings.length > 0 ? parsed.warnings : null,
   });

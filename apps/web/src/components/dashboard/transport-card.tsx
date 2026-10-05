@@ -183,6 +183,8 @@ export function TransportCard({
               title="Pedido de unidade avançada (grupo de apoio de UTI)"
             >
               USA
+              {transport.requestNumber != null && ` ${String(transport.requestNumber).padStart(2, "0")}`}
+              {transport.oc && ` · OC ${transport.oc}`}
             </span>
           )}
           <SeverityBadge transport={transport} />

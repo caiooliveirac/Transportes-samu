@@ -1,6 +1,7 @@
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { db } from "../client";
 import {
+  transportEvents,
   transportFollowups,
   transportRequests,
   whatsappMessages,
@@ -212,4 +213,65 @@ export async function inferOriginFromSender(
 
   if (rows.length !== 1) return null;
   return rows[0]!.unitId;
+}
+
+
+/**
+ * Transporte de avançada de que uma resposta do grupo fala: o citado na
+ * resposta ou, sem citação, o "TRANSPORTE NN" mais recente das últimas 24h.
+ */
+export async function findAdvancedTransport(params: {
+  repliedToWaMessageId: string | null;
+  requestNumber: number | null;
+}): Promise<string | null> {
+  if (params.repliedToWaMessageId) {
+    const [row] = await db
+      .select({ id: transportRequests.id })
+      .from(whatsappMessages)
+      .innerJoin(transportRequests, eq(transportRequests.whatsappMessageId, whatsappMessages.id))
+      .where(
+        and(
+          eq(whatsappMessages.waMessageId, params.repliedToWaMessageId),
+          eq(transportRequests.requestedKind, "USA"),
+        ),
+      )
+      .limit(1);
+    if (row) return row.id;
+  }
+  if (params.requestNumber == null) return null;
+  const [row] = await db
+    .select({ id: transportRequests.id })
+    .from(transportRequests)
+    .where(
+      and(
+        eq(transportRequests.requestedKind, "USA"),
+        eq(transportRequests.requestNumber, params.requestNumber),
+        sql`${transportRequests.createdAt} > now() - interval '24 hours'`,
+      ),
+    )
+    .orderBy(desc(transportRequests.createdAt))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/** Grava a OC que o SAMU abriu para o transporte, com rastro na timeline. */
+export async function setTransportOc(transportId: string, oc: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [antes] = await tx
+      .select({ oc: transportRequests.oc })
+      .from(transportRequests)
+      .where(eq(transportRequests.id, transportId));
+    if (!antes || antes.oc === oc) return;
+    await tx
+      .update(transportRequests)
+      .set({ oc, updatedAt: new Date() })
+      .where(eq(transportRequests.id, transportId));
+    await tx.insert(transportEvents).values({
+      transportId,
+      kind: "field_edit",
+      fromValue: { oc: antes.oc },
+      toValue: { oc },
+      note: "OC informada no grupo",
+    });
+  });
 }
