@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../client";
 import {
   transportEvents,
@@ -216,14 +216,42 @@ export async function inferOriginFromSender(
 }
 
 
+/** Pedidos de avançada das últimas `hours` horas, do mais antigo ao mais novo. */
+export async function listRecentAdvanced(hours = 18) {
+  return db
+    .select({
+      id: transportRequests.id,
+      patientName: transportRequests.patientName,
+      requestNumber: transportRequests.requestNumber,
+      oc: transportRequests.oc,
+      status: transportRequests.status,
+      handledByCer: transportRequests.handledByCer,
+      createdAt: transportRequests.createdAt,
+    })
+    .from(transportRequests)
+    .where(
+      and(
+        eq(transportRequests.requestedKind, "USA"),
+        sql`${transportRequests.createdAt} > now() - make_interval(hours => ${hours})`,
+      ),
+    )
+    .orderBy(asc(transportRequests.createdAt));
+}
+
 /**
- * Transporte de avançada de que uma resposta do grupo fala: o citado na
- * resposta ou, sem citação, o "TRANSPORTE NN" mais recente das últimas 24h.
+ * Transporte de avançada a que a OC dita no grupo pertence.
+ *
+ * 1. Citação (resposta ao pedido) → alvo exato.
+ * 2. "transporte NN" no texto → o NN mais recente.
+ * 3. Sem nenhum dos dois: o pedido MAIS ANTIGO ainda sem OC nas últimas 12h.
+ *    Medido no grupo: a OC vem ~4 min depois do pedido, de um só telefone, e
+ *    em 70% das vezes há um único pedido esperando; quando há dois, as OCs
+ *    saem na ordem dos pedidos (conferido com a planilha da chefia).
  */
 export async function findAdvancedTransport(params: {
   repliedToWaMessageId: string | null;
   requestNumber: number | null;
-}): Promise<string | null> {
+}): Promise<{ id: string; by: "reply" | "number" | "fifo" } | null> {
   if (params.repliedToWaMessageId) {
     const [row] = await db
       .select({ id: transportRequests.id })
@@ -236,22 +264,41 @@ export async function findAdvancedTransport(params: {
         ),
       )
       .limit(1);
-    if (row) return row.id;
+    if (row) return { id: row.id, by: "reply" };
   }
-  if (params.requestNumber == null) return null;
-  const [row] = await db
-    .select({ id: transportRequests.id })
-    .from(transportRequests)
-    .where(
-      and(
-        eq(transportRequests.requestedKind, "USA"),
-        eq(transportRequests.requestNumber, params.requestNumber),
-        sql`${transportRequests.createdAt} > now() - interval '24 hours'`,
-      ),
-    )
-    .orderBy(desc(transportRequests.createdAt))
-    .limit(1);
-  return row?.id ?? null;
+  const recentes = await listRecentAdvanced(12);
+  if (params.requestNumber != null) {
+    const alvo = recentes.filter((t) => t.requestNumber === params.requestNumber).at(-1);
+    return alvo ? { id: alvo.id, by: "number" } : null;
+  }
+  const fila = recentes.find((t) => !t.oc && !t.handledByCer && t.status !== "cancelado");
+  return fila ? { id: fila.id, by: "fifo" } : null;
+}
+
+/**
+ * A CER assumiu: sai da fila do SAMU (o grupo pede "favor retirar da
+ * demanda do SAMU") e fica marcado, para o relatório da chefia separar.
+ */
+export async function markHandledByCer(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(transportRequests)
+      .set({ handledByCer: true, status: "cancelado", updatedAt: new Date() })
+      .where(and(inArray(transportRequests.id, ids), eq(transportRequests.handledByCer, false)))
+      .returning({ id: transportRequests.id });
+    if (rows.length) {
+      await tx.insert(transportEvents).values(
+        rows.map((r) => ({
+          transportId: r.id,
+          kind: "status_change",
+          toValue: { status: "cancelado", handledByCer: true },
+          note: "Assumido pela CER (avisado no grupo)",
+        })),
+      );
+    }
+    return rows.length;
+  });
 }
 
 /** Grava a OC que o SAMU abriu para o transporte, com rastro na timeline. */

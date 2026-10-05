@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractAdvanced, extractOc, parseMessage } from "../src/index";
+import { cerTakeover, extractAdvanced, extractOc, isAdvancedRequest, isDemandNotice, parseMessage } from "../src/index";
 
 // Molde real do grupo de apoio de UTI, com dados fictícios.
 const pedido = (origem: string, extra = "", covid = "**") =>
@@ -46,13 +46,59 @@ describe("extractAdvanced", () => {
 
 describe("extractOc", () => {
   it.each([
-    ["OC 0468", false, "0468"],
-    ["Ocorrência nº 468 aberta", false, "0468"],
-    ["#0526", false, "0526"],
-    ["0565", true, "0565"],
-    ["0565", false, null],
-    ["FC 96, seguimos aguardando", false, null],
-  ])("%s", (texto, resposta, oc) => {
-    expect(extractOc(texto, resposta)).toBe(oc);
+    ["0468", "0468"],
+    ["oc/1165", "1165"],
+    ["OC 0603", "0603"],
+    ["OC. 0951", "0951"],
+    ["occ 0190", "0190"],
+    ["Ocor 0237", "0237"],
+    ["esta OC 0451, correspondente ao transporte 01 CMR", "0451"],
+    ["FC 96, seguimos aguardando", null],
+    ["ok", null],
+    ["transportes 02, 03 e 04", null],
+  ])("%s", (texto, oc) => {
+    expect(extractOc(texto)).toBe(oc);
   });
+});
+
+describe("isAdvancedRequest", () => {
+  it("molde é pedido; conversa que cita transporte não é", () => {
+    expect(isAdvancedRequest(pedido("12 CS"))).toBe(true);
+    expect(isAdvancedRequest("conseguem fazer o transporte 01? paciente grave no hospital")).toBe(false);
+  });
+});
+
+describe("cerTakeover", () => {
+  it.each([
+    ["CER ASSUMINDO OS TRANSPORTES 02 E 03 -FULANA DE TAL E BELTRANO DA SILVA.FAVOR RETIRAR DA LOGÍSTICA DO SAMU", [2, 3]],
+    ["TRANSPORTE 01,FULANA DE TAL,SERÁ REALIZADO PELA CER. FAVOR RETIRAR DA LOGÍSTICA DO SAMU", [1]],
+    ["CER assumirá os transportes 02-FULANA DE TAL E 03-BELTRANA DA SILVA.", [2, 3]],
+    ["CER REALIZARÁ O TRANSPORTE 10-FULANA DE TAL- FAVOR RETIRAR DA LOGÍSTICA DO SAMU", [10]],
+    ["A CER vai fazer o transporte de FULANO DE TAL", []],
+    [pedido("12 CS") + "\n\nTransportes assumidos pela CER. Favor retirar da demanda do SAMU.", [4]],
+  ])("%s", (texto, numeros) => {
+    expect(cerTakeover(texto)?.numbers).toEqual(numeros);
+  });
+  it.each([
+    "o transporte 4 será ou foi realizado pela CER ou pelo SAMU?",
+    "Defina dois casos para a CER assumir.",
+    "MR DA CER FEZ CONTATO COM O HOSPITAL, AUTORIZADO ENCAMINHAR ATÉ ÀS 18:00H",
+    pedido("12 CS"),
+  ])("não é: %s", (texto) => {
+    expect(cerTakeover(texto)).toBeNull();
+  });
+});
+
+describe("isDemandNotice", () => {
+  it.each([
+    "TRANSPORTES 2, 3, 4 E 5 EM TELA, SEM PREVISÃO",
+    "ESTAMOS COM 4 USAS DESATIVADAS",
+    "Alta demanda de ocorrencias primarias, grande dificuldade de acionar os transportes",
+    "samu sem unidades disponiveis",
+    "estamos com menos 3 USAs e volume alto de ocorrencia primaria",
+    "AINDA NAO CONSEGUIMOS REALIZAR NENHUM DOS TRANSPORTES SOLICITADOS",
+  ])("%s", (texto) => expect(isDemandNotice(texto)).toBe(true));
+  it.each(["ok", "Bom dia! Fulano na chefia SD.", "OC 0468", "CB02 VINCULADA NA OC"])("não é: %s", (texto) =>
+    expect(isDemandNotice(texto)).toBe(false),
+  );
 });

@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { extractAdvanced, parseMessage } from "@samu-cru/parser";
+import { extractAdvanced, isAdvancedRequest, parseMessage } from "@samu-cru/parser";
 import {
   MISSING_DESTINATION,
   MISSING_PATIENT_NAME,
@@ -9,6 +9,7 @@ import {
   db,
   inferOriginFromSender,
   insertTransport,
+  listRecentAdvanced,
   schema,
   type WhatsappMessage,
 } from "@samu-cru/db";
@@ -221,6 +222,34 @@ export async function createTransportFromMessage(params: {
   if (adv && !originId && adv.origin) originRaw = adv.origin;
   const advOk = !!adv && !!parsed.patientName.value && !!parsed.destination.value;
 
+  // Reenvio: o grupo reposta o mesmo paciente no mesmo plantão com número
+  // novo ou dado corrigido (9 em 247 pedidos). Atualiza o card que já existe
+  // em vez de abrir outro — um segundo card engoliria a OC do pedido seguinte.
+  if (adv && parsed.patientName.value) {
+    const nome = parsed.patientName.value.trim().toUpperCase();
+    const anterior = (await listRecentAdvanced(18))
+      .filter((t) => t.patientName.trim().toUpperCase() === nome)
+      .at(-1);
+    if (anterior) {
+      await db
+        .update(schema.transportRequests)
+        .set({
+          requestNumber: adv.number ?? anterior.requestNumber,
+          vagaZero: adv.vagaZero,
+          covid: adv.covid,
+          originUnitId: originId,
+          originUnitRaw: originRaw,
+          destinationName: parsed.destination.value ?? MISSING_DESTINATION,
+          vitals: parsed.vitals.value ?? null,
+          diagnoses: parsed.diagnoses.value ?? (adv.diagnosis ? [adv.diagnosis] : null),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.transportRequests.id, anterior.id));
+      baseLog.info({ transportId: anterior.id }, "pedido de avançada reenviado — card atualizado");
+      return { transportId: anterior.id, globalConfidence: parsed.globalConfidence, status: anterior.status };
+    }
+  }
+
   const transport = await insertTransport({
     whatsappMessageId: params.whatsappMessageDbId,
     requestNumber: adv?.number ?? null,
@@ -377,7 +406,8 @@ export async function reparseTransportFromMessage(params: {
       originUnitId: originId,
       originUnitRaw: originRaw,
       destinationName: parsed.destination.value ?? MISSING_DESTINATION,
-      procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
+      // o molde de avançada não tem procedimento: mantém o que o card já diz
+      procedure: parsed.procedure.value ?? (isAdvancedRequest(params.rawText) ? undefined : MISSING_PROCEDURE),
       procedureTime: parsed.procedureTimeText.value,
       deadlineAt: parsed.deadlineAt.value,
       tripType: parsed.tripType.value ?? "unknown",

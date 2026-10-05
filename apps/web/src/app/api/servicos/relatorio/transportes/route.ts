@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
            t.request_number as numero,
            t.vaga_zero,
            t.covid,
+           t.handled_by_cer as pela_cer,
            exists (select 1 from transport_followups f
                     where f.transport_id = t.id and f.intent = 'cancel') as cancelamento_pedido
       from transport_requests t
@@ -50,8 +51,20 @@ export async function GET(req: NextRequest) {
        and t.created_at < ${fim.toISOString()}::timestamptz
      order by t.created_at`);
 
+  // Avisos do próprio SAMU no grupo de que não está conseguindo atender os
+  // transportes (só mensagens do número do chefe de plantão).
+  const dificuldades = await db.execute(sql`
+    select f.id, m.received_at as em, f.text as texto
+      from transport_followups f
+      join whatsapp_messages m on m.id = f.whatsapp_message_id
+     where f.intent = 'notice'
+       and (m.raw_json->>'fromMe')::boolean is true
+       and m.received_at >= ${inicio.toISOString()}::timestamptz
+       and m.received_at < ${fim.toISOString()}::timestamptz
+     order by m.received_at`);
+
   return NextResponse.json(
-    { ok: true, transportes: rows },
+    { ok: true, transportes: rows, dificuldades },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

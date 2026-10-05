@@ -3,13 +3,15 @@ import http from "node:http";
 import { ENV } from "../env";
 import { logger } from "../logger";
 import { isAdvancedChat, isFromAllowedChat, looksLikeTransport } from "../pipeline/filter";
-import { extractOc } from "@samu-cru/parser";
+import { cerTakeover, extractOc, isAdvancedRequest, isDemandNotice } from "@samu-cru/parser";
 import { markSeen, wasSeen } from "../pipeline/dedupe";
 import { handleMessageEdit, ingestMessage } from "../pipeline/ingest";
 import { classifyFollowup } from "../pipeline/followup";
 import {
   findAdvancedTransport,
   findTransportById,
+  listRecentAdvanced,
+  markHandledByCer,
   recordFollowup,
   resolveFollowupTarget,
   setTransportOc,
@@ -84,7 +86,10 @@ const NOT_STORED = (reason: string): EventOutcome => ({
 });
 
 export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome> {
-  if (msg.fromMe) return NOT_STORED("from_me");
+  // No grupo de apoio de UTI o próprio número do chefe de plantão fala (é
+  // ele quem avisa que não há USA para os transportes) — ali fromMe vale.
+  const advanced = isAdvancedChat(msg.chatId);
+  if (msg.fromMe && !advanced) return NOT_STORED("from_me");
   if (!isFromAllowedChat(msg.chatId)) return NOT_STORED("chat_not_allowed");
   if (!msg.text) {
     // Só para o grupo vigiado, e em info: é a resposta para "o grupo usa
@@ -113,11 +118,31 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
   // de ajustar o filtro/parser não tem material. O veredito vai no rawJson
   // (jsonb, sem migration) para dar pra comparar depois o que o filtro
   // achou com o que a mensagem era.
-  const verdict = looksLikeTransport(msg.text);
+  // Grupo de apoio de UTI: só o molde "TRANSPORTE NN / NOME …" é pedido. O
+  // resto é conversa que cita transporte (e passaria no filtro genérico).
+  // Aviso de que a CER assumiu costuma vir com os pedidos colados junto —
+  // não é pedido novo.
+  const takeover = advanced ? cerTakeover(msg.text) : null;
+  const generic = looksLikeTransport(msg.text);
+  const verdict = advanced
+    ? takeover
+      ? { pass: false, reason: "avançada: CER assumiu", hits: generic.hits }
+      : isAdvancedRequest(msg.text)
+        ? { pass: true, reason: "avançada: molde do grupo", hits: generic.hits }
+        : { pass: false, reason: "avançada: fora do molde", hits: generic.hits }
+    : generic;
   // Acompanhamento de caso existente. Ainda não age — grava e loga, para
   // medir que fração chega como RESPOSTA citada (`replied_to_id`), que é a
   // única chave que identifica o transporte sem chutar.
-  const followup = verdict.pass ? null : classifyFollowup(msg.text);
+  // No grupo de avançada o único acompanhamento registrado é o aviso do
+  // SAMU de que não está conseguindo atender (lido pelo relatório da chefia).
+  const followup = verdict.pass
+    ? null
+    : advanced
+      ? msg.fromMe && isDemandNotice(msg.text)
+        ? ({ intent: "notice", matched: "demanda" } as const)
+        : null
+      : classifyFollowup(msg.text);
   if (followup) {
     logger.info(
       {
@@ -151,6 +176,7 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
       event: msg.event,
       source: "whatsmeow-gw",
       filterVerdict: verdict,
+      fromMe: msg.fromMe,
       repliedToId: msg.repliedToId,
       quotedBody: msg.quotedBody,
       followup,
@@ -159,25 +185,38 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
     createTransport: verdict.pass,
   });
 
-  // Grupo de apoio de UTI: o SAMU responde ao pedido com o número da OC que
-  // abriu. É dado do transporte, não pedido ao regulador — grava direto.
-  if (!verdict.pass && isAdvancedChat(msg.chatId)) {
+  // Grupo de apoio de UTI: o SAMU posta a OC que abriu e a CER avisa quando
+  // assume o transporte. São fatos do transporte — gravam direto.
+  if (advanced && !verdict.pass && result?.stored) {
     try {
-      const oc = extractOc(msg.text, msg.repliedToId !== null);
+      const oc = takeover ? null : extractOc(msg.text);
       if (oc) {
-        const num = /\bTRANSPORTE\s*(\d{1,3})\b/i.exec(msg.text);
+        const num = /\bTRANSP\w*\s*(\d{1,3})\b/i.exec(msg.text);
         const alvo = await findAdvancedTransport({
           repliedToWaMessageId: msg.repliedToId,
           requestNumber: num ? Number(num[1]) : null,
         });
-        if (alvo) await setTransportOc(alvo, oc);
+        if (alvo) await setTransportOc(alvo.id, oc);
         logger.info(
-          { waMessageId: msg.messageId, vinculada: alvo !== null },
-          alvo ? "OC informada no grupo, gravada no transporte" : "OC informada no grupo, sem transporte identificado",
+          { waMessageId: msg.messageId, por: alvo?.by ?? null },
+          alvo ? "OC do grupo gravada no transporte" : "OC do grupo sem transporte à espera",
         );
       }
+      if (takeover) {
+        const texto = msg.text.toUpperCase();
+        const ids = (await listRecentAdvanced(18))
+          .filter(
+            (t) =>
+              (t.requestNumber != null && takeover.numbers.includes(t.requestNumber)) ||
+              (t.patientName.trim().split(/\s+/).length >= 2 &&
+                texto.includes(t.patientName.trim().toUpperCase())),
+          )
+          .map((t) => t.id);
+        const n = await markHandledByCer(ids);
+        logger.info({ waMessageId: msg.messageId, citados: takeover.numbers, marcados: n }, "CER assumiu transporte(s)");
+      }
     } catch (err) {
-      logger.error({ err, waMessageId: msg.messageId }, "falha ao gravar OC do grupo");
+      logger.error({ err, waMessageId: msg.messageId }, "falha ao tratar OC / CER assumiu");
     }
   }
 
