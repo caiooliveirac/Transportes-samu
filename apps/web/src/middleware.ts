@@ -4,7 +4,7 @@ import { SESSION_COOKIE, verifySession } from "@/lib/auth/session";
 /**
  * Protege rotas baseado no kind da sessão.
  *
- * - public: /login, /api/auth/*, /api/health
+ * - public: /login, /api/auth/*, /api/health, /api/servicos/* (token)
  * - exige sessão "unit": /solicitar/*, /api/solicitar/*
  * - exige sessão "admin": /, /admin/*, /api/admin/*, /api/transports/*,
  *   /api/stream
@@ -18,6 +18,8 @@ export async function middleware(req: NextRequest) {
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/health" ||
+    // serviço entre apps: a própria rota confere o token
+    pathname.startsWith("/api/servicos/") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
   ) {
