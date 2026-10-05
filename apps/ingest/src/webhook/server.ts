@@ -2,11 +2,18 @@ import http from "node:http";
 
 import { ENV } from "../env";
 import { logger } from "../logger";
-import { isFromAllowedChat, looksLikeTransport } from "../pipeline/filter";
+import { isAdvancedChat, isFromAllowedChat, looksLikeTransport } from "../pipeline/filter";
+import { extractOc } from "@samu-cru/parser";
 import { markSeen, wasSeen } from "../pipeline/dedupe";
 import { handleMessageEdit, ingestMessage } from "../pipeline/ingest";
 import { classifyFollowup } from "../pipeline/followup";
-import { findTransportById, recordFollowup, resolveFollowupTarget } from "@samu-cru/db";
+import {
+  findAdvancedTransport,
+  findTransportById,
+  recordFollowup,
+  resolveFollowupTarget,
+  setTransportOc,
+} from "@samu-cru/db";
 import { composeAskField, composeAskTarget } from "../bot/compose";
 import { recordBotMessage } from "../bot/outbox";
 import {
@@ -151,6 +158,28 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
     receivedAt: msg.receivedAt,
     createTransport: verdict.pass,
   });
+
+  // Grupo de apoio de UTI: o SAMU responde ao pedido com o número da OC que
+  // abriu. É dado do transporte, não pedido ao regulador — grava direto.
+  if (!verdict.pass && isAdvancedChat(msg.chatId)) {
+    try {
+      const oc = extractOc(msg.text, msg.repliedToId !== null);
+      if (oc) {
+        const num = /\bTRANSPORTE\s*(\d{1,3})\b/i.exec(msg.text);
+        const alvo = await findAdvancedTransport({
+          repliedToWaMessageId: msg.repliedToId,
+          requestNumber: num ? Number(num[1]) : null,
+        });
+        if (alvo) await setTransportOc(alvo, oc);
+        logger.info(
+          { waMessageId: msg.messageId, vinculada: alvo !== null },
+          alvo ? "OC informada no grupo, gravada no transporte" : "OC informada no grupo, sem transporte identificado",
+        );
+      }
+    } catch (err) {
+      logger.error({ err, waMessageId: msg.messageId }, "falha ao gravar OC do grupo");
+    }
+  }
 
   // Acompanhamento: liga a mensagem ao transporte de que ela fala e deixa
   // o pedido visível no painel. Nada muda o transporte sozinho — o grupo

@@ -37,6 +37,10 @@ export async function GET(req: NextRequest) {
            nullif(t.destination_name, '(sem destino)') as destino,
            t.status,
            t.ambulance_label as viatura,
+           t.oc,
+           t.request_number as numero,
+           t.vaga_zero,
+           t.covid,
            exists (select 1 from transport_followups f
                     where f.transport_id = t.id and f.intent = 'cancel') as cancelamento_pedido
       from transport_requests t

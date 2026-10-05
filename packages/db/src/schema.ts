@@ -162,6 +162,14 @@ export const transportRequests = pgTable(
      * relatório da chefia puxa. Null = pedido comum (básica).
      */
     requestedKind: ambulanceKindEnum("requested_kind"),
+    /** "TRANSPORTE 04" — sequência do dia no grupo de apoio de UTI. */
+    requestNumber: integer("request_number"),
+    /** Pedido marcado como VAGA ZERO no grupo. */
+    vagaZero: boolean("vaga_zero").notNull().default(false),
+    /** COVID declarado no pedido: sim | suspeito | nao. */
+    covid: varchar("covid", { length: 16 }),
+    /** Número da OC que o SAMU abriu — dito no grupo em resposta ao pedido. */
+    oc: varchar("oc", { length: 16 }),
     /** Unidade que criou via web form. Null em transportes legados WhatsApp. */
     createdByUnitId: integer("created_by_unit_id").references(() => units.id),
 
