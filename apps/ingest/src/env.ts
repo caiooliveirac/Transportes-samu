@@ -69,6 +69,12 @@ export const ENV = {
   webhookSecret: process.env.WA_WEBHOOK_SECRET ?? "secret",
   /** JIDs de grupos permitidos. Vazio = aceita TODOS (modo descoberta). */
   allowedChats: parseList(process.env.WA_ALLOWED_CHATS),
+  /**
+   * Grupos de apoio de UTI (transporte de avançada). Também são vigiados,
+   * sem precisar repetir o JID em WA_ALLOWED_CHATS; o transporte nasce com
+   * `requestedKind = "USA"`.
+   */
+  advancedChats: parseList(process.env.WA_ADVANCED_CHATS),
   /** "true" parseia e loga, mas não escreve no DB. */
   dryRun: process.env.DRY_RUN === "true",
   logLevel: optional("LOG_LEVEL", "info"),

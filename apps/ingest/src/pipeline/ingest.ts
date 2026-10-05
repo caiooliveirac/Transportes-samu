@@ -15,6 +15,7 @@ import {
 
 import { logger } from "../logger";
 import { ENV } from "../env";
+import { isAdvancedChat } from "./filter";
 
 interface UnitResolution {
   id: number;
@@ -135,6 +136,7 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
   // 2. Parser + insert (compartilhado com o backfill)
   const created = await createTransportFromMessage({
     waSenderId: input.waSenderId,
+    advanced: isAdvancedChat(input.waChatId),
     whatsappMessageDbId,
     rawText: input.rawText,
     receivedAt: input.receivedAt,
@@ -163,6 +165,8 @@ export async function createTransportFromMessage(params: {
   receivedAt: Date;
   /** Telefone de quem postou — base para deduzir a origem que o texto não diz. */
   waSenderId?: string | null;
+  /** Veio do grupo de apoio de UTI — pedido de unidade avançada. */
+  advanced?: boolean;
 }): Promise<{ transportId: string | null; globalConfidence: number; status: string }> {
   const baseLog = logger.child({ whatsappMessageDbId: params.whatsappMessageDbId });
 
@@ -223,6 +227,7 @@ export async function createTransportFromMessage(params: {
     patientCpf: parsed.patientCpf.value,
     originUnitId: originId,
     originUnitRaw: originRaw,
+    requestedKind: params.advanced ? "USA" : null,
     destinationName: parsed.destination.value ?? MISSING_DESTINATION,
     procedure: parsed.procedure.value ?? MISSING_PROCEDURE,
     procedureTime: parsed.procedureTimeText.value,

@@ -156,6 +156,12 @@ export const transportRequests = pgTable(
     // Origem da solicitação
     /** 'whatsapp' (legado), 'web_form' (solicitante UPA), 'manual' (regulador) */
     source: varchar("source", { length: 16 }).notNull().default("whatsapp"),
+    /**
+     * Recurso que o pedido exige. "USA" = veio do grupo de apoio de UTI
+     * (WA_ADVANCED_CHATS) — card de outra cor no painel e o único tipo que o
+     * relatório da chefia puxa. Null = pedido comum (básica).
+     */
+    requestedKind: ambulanceKindEnum("requested_kind"),
     /** Unidade que criou via web form. Null em transportes legados WhatsApp. */
     createdByUnitId: integer("created_by_unit_id").references(() => units.id),
 

@@ -9,8 +9,14 @@ export function isFromAllowedChat(chatId: string | null | undefined): boolean {
   if (!chatId.endsWith("@g.us") && !chatId.endsWith("@s.whatsapp.net")) {
     return false;
   }
+  if (ENV.advancedChats.includes(chatId)) return true;
   if (ENV.allowedChats.length === 0) return chatId.endsWith("@g.us");
   return ENV.allowedChats.includes(chatId);
+}
+
+/** Grupo de apoio de UTI: o pedido é de unidade avançada. */
+export function isAdvancedChat(chatId: string | null | undefined): boolean {
+  return !!chatId && ENV.advancedChats.includes(chatId);
 }
 
 /**

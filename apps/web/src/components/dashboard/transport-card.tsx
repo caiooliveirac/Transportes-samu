@@ -79,6 +79,7 @@ export function TransportCard({
   const faded = isFaded(transport.status, transport.updatedAt, now);
   const deadline = transport.deadlineAt ? new Date(transport.deadlineAt) : null;
   const dragging = drag.draggingId === transport.id;
+  const advanced = transport.requestedKind === "USA";
   const timeColor = overdue
     ? "text-rose-300"
     : urgent
@@ -122,6 +123,9 @@ export function TransportCard({
       className={cn(
         "group/card bg-ink-100 hover:bg-ink-150 relative flex items-stretch rounded-md border-l-[3px] ring-1 ring-white/[0.05] transition-colors duration-150 hover:ring-white/10",
         meta.borderClass,
+        // Pedido de unidade avançada (grupo de apoio de UTI): fundo violeta,
+        // para não se confundir com a fila de básica.
+        advanced && "bg-violet-500/[0.13] ring-violet-400/35 hover:bg-violet-500/[0.18] hover:ring-violet-400/50",
         overdue && "ring-rose-600/30",
         cancelAsked && "ring-rose-500/50",
         urgent && !overdue && "animate-card-pulse",
@@ -173,6 +177,14 @@ export function TransportCard({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {advanced && (
+            <span
+              className="inline-flex h-[15px] shrink-0 items-center rounded bg-violet-500/25 px-1.5 text-[10px] font-semibold tracking-wide text-violet-100 ring-1 ring-inset ring-violet-400/50"
+              title="Pedido de unidade avançada (grupo de apoio de UTI)"
+            >
+              USA
+            </span>
+          )}
           <SeverityBadge transport={transport} />
           <span
             className={cn(
