@@ -31,6 +31,7 @@ import {
   createTransportFromMessage,
   reparseTransportFromMessage,
 } from "../pipeline/ingest";
+import { isAdvancedChat } from "../pipeline/filter";
 
 const args = process.argv.slice(2);
 const limit = Number(args.find((a) => /^\d+$/.test(a)) ?? 200);
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
       receivedAt: schema.whatsappMessages.receivedAt,
       rawText: schema.whatsappMessages.rawText,
       rawJson: schema.whatsappMessages.rawJson,
+      waChatId: schema.whatsappMessages.waChatId,
     })
     .from(schema.whatsappMessages)
     .leftJoin(
@@ -106,6 +108,7 @@ async function main(): Promise<void> {
     }
 
     const created = await createTransportFromMessage({
+      advanced: isAdvancedChat(r.waChatId),
       whatsappMessageDbId: r.id,
       rawText: r.rawText,
       receivedAt: r.receivedAt,
