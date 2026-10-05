@@ -65,12 +65,7 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
     short: "UPA Hélio Machado",
     full: "UPA Hélio Machado",
     type: "UPA",
-    aliases: [
-      "UPA HELIO MACHADO",
-      "UPA HÉLIO MACHADO",
-      "HELIO MACHADO",
-      "HÉLIO MACHADO",
-    ],
+    aliases: ["UPA HELIO MACHADO", "UPA HÉLIO MACHADO", "HELIO MACHADO", "HÉLIO MACHADO"],
     isOrigin: true,
     noOwnAmbulance: true,
     displayOrder: 40,
@@ -107,12 +102,7 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
     short: "PA Pernambués",
     full: "PA Pernambués",
     type: "PA",
-    aliases: [
-      "PA PERNAMBUES",
-      "PA PERNAMBUÉS",
-      "PERNAMBUES",
-      "PERNAMBUÉS",
-    ],
+    aliases: ["PA PERNAMBUES", "PA PERNAMBUÉS", "PERNAMBUES", "PERNAMBUÉS"],
     isOrigin: true,
     displayOrder: 70,
   },
@@ -141,7 +131,7 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
     short: "UPA San Martin",
     full: "UPA San Martin",
     type: "UPA",
-    aliases: ["UPA SAN MARTIN", "SAN MARTIN", "SÃO MARTIN"],
+    aliases: ["UPA S MARTIN", "S MARTIN", "UPA SAN MARTIN", "SAN MARTIN", "SÃO MARTIN"],
     isOrigin: true,
     displayOrder: 90,
   },
@@ -150,12 +140,7 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
     short: "UPA Santo Antônio",
     full: "UPA Santo Antônio",
     type: "UPA",
-    aliases: [
-      "UPA SANTO ANTONIO",
-      "UPA SANTO ANTÔNIO",
-      "SANTO ANTONIO",
-      "SANTO ANTÔNIO",
-    ],
+    aliases: ["UPA SANTO ANTONIO", "UPA SANTO ANTÔNIO", "SANTO ANTONIO", "SANTO ANTÔNIO"],
     isOrigin: true,
     displayOrder: 100,
   },
@@ -190,6 +175,8 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
     full: "PA Tancredo Neves / Rodrigo Argolo",
     type: "PA",
     aliases: [
+      "UPA R ARGOLO",
+      "R ARGOLO",
       "PA TANCREDO NEVES",
       "PA RODRIGO ARGOLO",
       "RODRIGO ARGOLO",
@@ -246,6 +233,9 @@ export const UNITS: ReadonlyArray<UnitSeed> = [
       "PA PAU MIÚDO",
       "16 CS",
       "16º CS",
+      "16. CENTRO DE SAUDE",
+      "UNID EMERG 16. CENTRO DE SAUDE",
+      "UERA",
       "16 CENTRO",
       "16º CENTRO",
       "PAU MIUDO",
@@ -322,9 +312,7 @@ export const DESTINATION_ACRONYMS: Readonly<Record<string, string>> = {
  * lê a fila de relance: "Hospital da Mulher" e "Maternidade Alan Sanches"
  * é o que ele reconhece.
  */
-export const DESTINATION_DISPLAY_OVERRIDES: ReadonlyArray<
-  readonly [RegExp, string]
-> = [
+export const DESTINATION_DISPLAY_OVERRIDES: ReadonlyArray<readonly [RegExp, string]> = [
   [/maria\s+luiza|hosp\w*\s+da\s+mulher/i, "Hosp. da Mulher"],
   [/alan\s+sanches/i, "Mat. Alan Sanches"],
 ];

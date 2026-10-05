@@ -30,7 +30,14 @@ export {
   extractCpf,
 } from "./extractors/patient";
 export { extractOrigin } from "./extractors/origin";
-export { extractAdvanced, extractOc, type AdvancedRequest } from "./advanced";
+export {
+  cerTakeover,
+  extractAdvanced,
+  extractOc,
+  isAdvancedRequest,
+  isDemandNotice,
+  type AdvancedRequest,
+} from "./advanced";
 export { extractDestination } from "./extractors/destination";
 export { extractProcedure, inferTripType } from "./extractors/procedure";
 export {

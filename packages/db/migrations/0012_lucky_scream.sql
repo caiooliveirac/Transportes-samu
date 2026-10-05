@@ -1,0 +1,1 @@
+ALTER TABLE "transport_requests" ADD COLUMN "handled_by_cer" boolean DEFAULT false NOT NULL;

@@ -170,6 +170,8 @@ export const transportRequests = pgTable(
     covid: varchar("covid", { length: 16 }),
     /** Número da OC que o SAMU abriu — dito no grupo em resposta ao pedido. */
     oc: varchar("oc", { length: 16 }),
+    /** A CER avisou no grupo que faz o transporte com ambulância própria. */
+    handledByCer: boolean("handled_by_cer").notNull().default(false),
     /** Unidade que criou via web form. Null em transportes legados WhatsApp. */
     createdByUnitId: integer("created_by_unit_id").references(() => units.id),
 
