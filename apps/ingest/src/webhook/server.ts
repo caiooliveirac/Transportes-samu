@@ -4,7 +4,7 @@ import { ENV } from "../env";
 import { logger } from "../logger";
 import { isAdvancedChat, isFromAllowedChat, looksLikeTransport } from "../pipeline/filter";
 import { cerTakeover, extractOc, isAdvancedRequest, isDemandNotice } from "@samu-cru/parser";
-import { markSeen, wasSeen } from "../pipeline/dedupe";
+import { forgetSeen, markSeen, wasSeen } from "../pipeline/dedupe";
 import { handleMessageEdit, ingestMessage } from "../pipeline/ingest";
 import { classifyFollowup } from "../pipeline/followup";
 import {
@@ -183,6 +183,10 @@ export async function handleEvent(msg: NormalizedMessage): Promise<EventOutcome>
     },
     receivedAt: msg.receivedAt,
     createTransport: verdict.pass,
+  }).catch((err: unknown) => {
+    // Volta 500 e o gateway reenvia: o reenvio precisa passar pelo dedupe.
+    forgetSeen(msg.messageId);
+    throw err;
   });
 
   // Grupo de apoio de UTI: o SAMU posta a OC que abriu e a CER avisa quando

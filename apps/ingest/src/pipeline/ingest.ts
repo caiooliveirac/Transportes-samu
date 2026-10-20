@@ -11,6 +11,7 @@ import {
   insertTransport,
   listRecentAdvanced,
   schema,
+  type Executor,
   type WhatsappMessage,
 } from "@samu-cru/db";
 
@@ -30,9 +31,9 @@ interface UnitResolution {
  */
 let unitsByCode: Map<string, UnitResolution> | null = null;
 
-async function getUnitsByCode(): Promise<Map<string, UnitResolution>> {
+async function getUnitsByCode(executor: Executor = db): Promise<Map<string, UnitResolution>> {
   if (unitsByCode) return unitsByCode;
-  const rows = await db.select().from(schema.units);
+  const rows = await executor.select().from(schema.units);
   unitsByCode = new Map(rows.map((u) => [u.code, { id: u.id, code: u.code }]));
   return unitsByCode;
 }
@@ -75,15 +76,26 @@ export interface IngestResult {
  *  - transport_requests.id é UUID — não há chave natural, então o gate
  *    é "criamos um novo transport SOMENTE quando inserimos uma nova
  *    whatsapp_messages".
+ *  - Por isso mensagem e transporte entram numa transação só. Se o banco
+ *    cai depois de gravar a mensagem e antes do transporte, a mensagem sai
+ *    junto e o reenvio do gateway refaz tudo — sem isso o reenvio acharia a
+ *    mensagem "já conhecida" e o pedido se perderia. Entrega simultânea da
+ *    mesma mensagem espera a primeira transação na UNIQUE e cai no ON
+ *    CONFLICT: um transporte só. Toda query daqui roda no `tx` — com o pool
+ *    cheio de transações esperando conexão, uma query fora dele travaria.
  */
 export async function ingestMessage(input: IngestInput): Promise<IngestResult | null> {
+  return db.transaction((tx) => ingestInTx(tx, input));
+}
+
+async function ingestInTx(tx: Executor, input: IngestInput): Promise<IngestResult | null> {
   const baseLog = logger.child({
     waMessageId: input.waMessageId,
     waChatId: input.waChatId,
   });
 
   // 1. Insert whatsapp_messages — pega ID novo OU descobre que já existia
-  const [inserted] = await db
+  const [inserted] = await tx
     .insert(schema.whatsappMessages)
     .values({
       waMessageId: input.waMessageId,
@@ -102,7 +114,7 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
     whatsappMessageDbId = inserted.id;
     isNew = true;
   } else {
-    const [existing] = await db
+    const [existing] = await tx
       .select({ id: schema.whatsappMessages.id })
       .from(schema.whatsappMessages)
       .where(eq(schema.whatsappMessages.waMessageId, input.waMessageId))
@@ -142,6 +154,7 @@ export async function ingestMessage(input: IngestInput): Promise<IngestResult | 
     whatsappMessageDbId,
     rawText: input.rawText,
     receivedAt: input.receivedAt,
+    tx,
   });
 
   return {
@@ -169,8 +182,11 @@ export async function createTransportFromMessage(params: {
   waSenderId?: string | null;
   /** Veio do grupo de apoio de UTI — pedido de unidade avançada. */
   advanced?: boolean;
+  /** Transação do ingest (ver ingestMessage). O backfill roda sem. */
+  tx?: Executor;
 }): Promise<{ transportId: string | null; globalConfidence: number; status: string }> {
   const baseLog = logger.child({ whatsappMessageDbId: params.whatsappMessageDbId });
+  const q = params.tx ?? db;
 
   const parsed = parseMessage({
     rawText: params.rawText,
@@ -178,7 +194,7 @@ export async function createTransportFromMessage(params: {
   });
 
   // Resolve origin unit code → DB id (parser pode vir com null)
-  const units = await getUnitsByCode();
+  const units = await getUnitsByCode(q);
   const originResolved = parsed.originUnitCode.value
     ? (units.get(parsed.originUnitCode.value) ?? null)
     : null;
@@ -205,7 +221,7 @@ export async function createTransportFromMessage(params: {
   let originId = originResolved?.id ?? null;
   let originRaw = parsed.originUnitCode.value ?? parsed.originUnitCode.raw ?? "—";
   if (!originId && params.waSenderId) {
-    const inferred = await inferOriginFromSender(params.waSenderId);
+    const inferred = await inferOriginFromSender(params.waSenderId, q);
     if (inferred) {
       const unit = [...units.values()].find((u) => u.id === inferred);
       if (unit) {
@@ -228,9 +244,9 @@ export async function createTransportFromMessage(params: {
   // em vez de abrir outro — um segundo card engoliria a OC do pedido seguinte.
   // Card que já saiu da fila (concluído, cancelado, no destino) não é reaproveitado.
   if (adv && parsed.patientName.value) {
-    const anterior = cardDoReenvio(await listRecentAdvanced(18), parsed.patientName.value);
+    const anterior = cardDoReenvio(await listRecentAdvanced(18, q), parsed.patientName.value);
     if (anterior) {
-      await db
+      await q
         .update(schema.transportRequests)
         .set({
           requestNumber: adv.number ?? anterior.requestNumber,
@@ -278,7 +294,7 @@ export async function createTransportFromMessage(params: {
     status: advOk ? "novo" : parsed.suggestedStatus,
     parseConfidence: parsed.globalConfidence,
     parseWarnings: parsed.warnings.length > 0 ? parsed.warnings : null,
-  });
+  }, q);
 
   baseLog.info(
     {

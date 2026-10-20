@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { db } from "../client";
+import { db, type Executor } from "../client";
 import {
   transportEvents,
   transportFollowups,
@@ -190,9 +190,10 @@ export async function pendingFollowupCounts(): Promise<
  */
 export async function inferOriginFromSender(
   waSenderId: string | null,
+  executor: Executor = db,
 ): Promise<number | null> {
   if (!waSenderId) return null;
-  const rows = await db
+  const rows = await executor
     .select({
       unitId: transportRequests.originUnitId,
       n: sql<number>`count(*)::int`,
@@ -217,8 +218,8 @@ export async function inferOriginFromSender(
 
 
 /** Pedidos de avançada das últimas `hours` horas, do mais antigo ao mais novo. */
-export async function listRecentAdvanced(hours = 18) {
-  return db
+export async function listRecentAdvanced(hours = 18, executor: Executor = db) {
+  return executor
     .select({
       id: transportRequests.id,
       patientName: transportRequests.patientName,

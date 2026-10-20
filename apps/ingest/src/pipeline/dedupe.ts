@@ -28,6 +28,16 @@ export function wasSeen(messageId: string): boolean {
   return seen.has(messageId);
 }
 
+/**
+ * Desfaz a marca quando a ingestão falha. A marca vem antes de ingerir para
+ * segurar a entrega repetida enquanto a primeira está em curso; mas, se ela
+ * ficasse depois de um erro, o reenvio do gateway viraria `already_seen` (200)
+ * e o pedido de transporte se perderia.
+ */
+export function forgetSeen(messageId: string): void {
+  seen.delete(messageId);
+}
+
 /** Test-only helper. */
 export function _resetForTests(): void {
   seen.clear();

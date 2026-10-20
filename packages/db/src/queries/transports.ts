@@ -9,7 +9,7 @@ import {
   type TransportStatus,
   type TripType,
 } from "@samu-cru/shared";
-import { db } from "../client";
+import { db, type Executor } from "../client";
 import { listFollowupsForTransport, pendingFollowupCounts } from "./followups";
 import {
   transportRequests,
@@ -32,8 +32,9 @@ import {
  */
 export async function insertTransport(
   values: NewTransportRequest,
+  executor: Executor = db,
 ): Promise<TransportRequest> {
-  const [row] = await db.insert(transportRequests).values(values).returning();
+  const [row] = await executor.insert(transportRequests).values(values).returning();
   if (!row) throw new Error("insertTransport returned no row");
   return row;
 }

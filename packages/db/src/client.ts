@@ -37,3 +37,6 @@ export const db: DrizzleDb = new Proxy({} as DrizzleDb, {
 });
 
 export type Database = DrizzleDb;
+
+/** O `db` ou uma transação aberta nele — para query que precisa rodar dentro dela. */
+export type Executor = Pick<Database, "select" | "insert" | "update">;
