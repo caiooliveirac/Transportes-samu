@@ -17,6 +17,7 @@ import {
 import { logger } from "../logger";
 import { ENV } from "../env";
 import { isAdvancedChat } from "./filter";
+import { cardDoReenvio } from "./reenvio";
 
 interface UnitResolution {
   id: number;
@@ -225,11 +226,9 @@ export async function createTransportFromMessage(params: {
   // Reenvio: o grupo reposta o mesmo paciente no mesmo plantão com número
   // novo ou dado corrigido (9 em 247 pedidos). Atualiza o card que já existe
   // em vez de abrir outro — um segundo card engoliria a OC do pedido seguinte.
+  // Card que já saiu da fila (concluído, cancelado, no destino) não é reaproveitado.
   if (adv && parsed.patientName.value) {
-    const nome = parsed.patientName.value.trim().toUpperCase();
-    const anterior = (await listRecentAdvanced(18))
-      .filter((t) => t.patientName.trim().toUpperCase() === nome)
-      .at(-1);
+    const anterior = cardDoReenvio(await listRecentAdvanced(18), parsed.patientName.value);
     if (anterior) {
       await db
         .update(schema.transportRequests)
