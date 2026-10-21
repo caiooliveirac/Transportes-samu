@@ -75,6 +75,33 @@ describe("isInternalPath", () => {
     expect(isInternalPath("https://evil.com")).toBe(false);
     expect(isInternalPath("admin")).toBe(false);
   });
+
+  it("A2-8: barra barra invertida e variantes codificadas (redirect aberto)", () => {
+    // O navegador trata "\" como "/": "/\evil.com" vira "//evil.com".
+    for (const evil of [
+      "/\\evil.com",
+      "//evil.com",
+      "/%5Cevil.com",
+      "/%5cevil.com",
+      "/%2F/evil.com",
+      "/\t/evil.com",
+      "/ok\\..\\x",
+    ]) {
+      expect(isInternalPath(evil), evil).toBe(false);
+      expect(
+        resolvePostLoginTarget({ explicitNext: evil, kind: "user", role: "admin" }),
+      ).toBe("/");
+    }
+  });
+
+  it("A2-8: caminho interno simples continua aceito", () => {
+    for (const ok of ["/ok/path", "/", "/admin/users?aba=2", "/solicitar/abc-123#topo"]) {
+      expect(isInternalPath(ok), ok).toBe(true);
+    }
+    expect(resolvePostLoginTarget({ explicitNext: "/ok/path", kind: "user", role: "admin" })).toBe(
+      "/ok/path",
+    );
+  });
 });
 
 describe("canAccess espelha o middleware", () => {

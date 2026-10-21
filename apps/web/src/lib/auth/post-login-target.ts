@@ -24,9 +24,24 @@ export interface TargetInput {
  * `next` vem da URL, então é entrada não confiável: só caminho interno.
  * "//evil.com" e "https://evil.com" são redirect aberto; "/x" é o único
  * formato aceito.
+ *
+ * Lista do que PODE, não do que não pode (A2-8): o navegador lê "\" como
+ * "/", então "/\evil.com" é "//evil.com". Só passa "/" seguido de
+ * caracteres de caminho/query/fragmento de URL; nada de "\", espaço ou
+ * controle. E o mesmo vale depois de decodificar uma vez, para que
+ * "/%5Cevil.com" ou "/%2F/evil.com" não virem barra em quem decodificar.
  */
+const CAMINHO_SIMPLES = /^\/(?![/\\])[A-Za-z0-9\-._~!$&'()*+,;=:@/?#%]*$/;
+
 export function isInternalPath(value: string): boolean {
-  return value.startsWith("/") && !value.startsWith("//");
+  if (!CAMINHO_SIMPLES.test(value)) return false;
+  let decodificado: string;
+  try {
+    decodificado = decodeURIComponent(value);
+  } catch {
+    return false;
+  }
+  return !decodificado.startsWith("//") && !/[\\\s\p{Cc}]/u.test(decodificado);
 }
 
 /** O middleware deixaria esta sessão entrar nesta rota? */
